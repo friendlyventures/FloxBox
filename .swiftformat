@@ -1,0 +1,5 @@
+--allman false
+--indent 4
+--maxwidth 120
+--trailing-commas always
+--self remove

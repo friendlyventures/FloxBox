@@ -1,0 +1,49 @@
+[tools]
+pre-commit = "latest"
+swiftformat = "latest"
+swiftlint = "latest"
+
+[tasks.build]
+description = "Default build (Direct distribution) for local dev and CI parity"
+run = [
+  "xcodebuild -project FloxBox.xcodeproj -scheme FloxBox -configuration Debug build"
+]
+
+[tasks.build-appstore]
+description = "Build the App Store variant (manual submissions only)"
+run = [
+  "xcodebuild -project FloxBox.xcodeproj -scheme FloxBox-AppStore -configuration Debug build"
+]
+
+[tasks.format]
+description = "Run after Swift edits to keep formatting consistent"
+run = [
+  "swiftformat ."
+]
+
+[tasks.lint]
+description = "Run SwiftLint rules"
+run = [
+  "swiftlint --fix",
+  "swiftlint --strict"
+]
+
+[tasks.check]
+description = "Format then lint"
+run = [
+  "mise format",
+  "mise lint"
+]
+
+[tasks.install-githooks]
+description = "Install git hooks via pre-commit"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+git config --local --unset-all core.hooksPath || true
+
+pre-commit install -f --install-hooks \
+  --hook-type pre-commit \
+  --hook-type prepare-commit-msg
+'''

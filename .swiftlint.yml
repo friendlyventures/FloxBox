@@ -1,0 +1,15 @@
+disabled_rules:
+  - opening_brace
+  - closing_brace
+  - indentation_width
+  - statement_position
+  - trailing_comma
+
+opt_in_rules:
+  - control_statement
+
+line_length:
+  warning: 120
+  error: 200
+  ignores_comments: true
+  ignores_urls: true
