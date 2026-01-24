@@ -4,9 +4,8 @@ import XCTest
 
 @MainActor
 final class ContentViewTests: XCTestCase {
-    func testContentViewAndHelpersBuild() {
+    func testContentViewBuildsWithAPIKeyRow() {
         _ = ContentView(configuration: .appStore)
-        _ = OptionalDoubleField(title: "Threshold", value: .constant(nil as Double?))
-        _ = OptionalIntField(title: "Prefix", value: .constant(nil as Int?))
+        _ = APIKeyRow(apiKey: .constant(""), status: .constant(.idle))
     }
 }

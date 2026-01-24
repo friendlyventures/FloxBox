@@ -13,6 +13,12 @@ public struct ContentView: View {
         @Bindable var viewModel = viewModel
 
         VStack(alignment: .leading, spacing: 12) {
+            APIKeyRow(
+                apiKey: $viewModel.apiKeyInput,
+                status: $viewModel.apiKeyStatus,
+                onSave: viewModel.saveAPIKey
+            )
+
             HStack(spacing: 12) {
                 Picker("Model", selection: $viewModel.model) {
                     ForEach(TranscriptionModel.allCases) { model in
@@ -86,6 +92,40 @@ public struct ContentView: View {
             return .red
         }
         return .secondary
+    }
+}
+
+struct APIKeyRow: View {
+    @Binding var apiKey: String
+    @Binding var status: APIKeyStatus
+    var onSave: () -> Void = {}
+
+    var body: some View {
+        HStack(spacing: 12) {
+            TextField("sk-...", text: $apiKey)
+                .textFieldStyle(.roundedBorder)
+                .frame(minWidth: 320)
+
+            Button("Save") {
+                onSave()
+            }
+
+            if let message = status.message {
+                Text(message)
+                    .foregroundStyle(statusColor(for: status))
+            }
+
+            Spacer()
+        }
+    }
+
+    private func statusColor(for status: APIKeyStatus) -> Color {
+        switch status {
+        case .error:
+            return .red
+        default:
+            return .secondary
+        }
     }
 }
 
