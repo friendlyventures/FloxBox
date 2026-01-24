@@ -19,7 +19,7 @@ public enum VADMode: String, CaseIterable, Identifiable {
     }
 }
 
-public enum ManualCommitInterval: Equatable, CaseIterable, Identifiable {
+public enum ManualCommitInterval: Equatable, CaseIterable, Identifiable, Hashable {
     case off
     case seconds(Int)
 
