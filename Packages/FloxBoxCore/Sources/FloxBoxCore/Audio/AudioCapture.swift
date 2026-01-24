@@ -1,7 +1,7 @@
 import AVFoundation
 
 public final class AudioCapture {
-    public typealias Handler = @Sendable (Data) -> Void
+    public typealias Handler = (Data) -> Void
 
     private let engine = AVAudioEngine()
     private var converter: AVAudioConverter?
