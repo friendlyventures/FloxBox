@@ -21,6 +21,26 @@ public enum RecordingStatus: Equatable {
     }
 }
 
+public enum APIKeyStatus: Equatable {
+    case idle
+    case saved
+    case cleared
+    case error(String)
+
+    public var message: String? {
+        switch self {
+        case .idle:
+            return nil
+        case .saved:
+            return "Saved"
+        case .cleared:
+            return "Cleared"
+        case .error(let message):
+            return message
+        }
+    }
+}
+
 @MainActor
 @Observable
 public final class TranscriptionViewModel {
@@ -30,17 +50,28 @@ public final class TranscriptionViewModel {
     public var serverVAD: ServerVADTuning = .init()
     public var semanticVAD: SemanticVADTuning = .init()
 
+    public var apiKeyInput: String
+    public var apiKeyStatus: APIKeyStatus = .idle
     public var transcript: String = ""
     public var status: RecordingStatus = .idle
     public var errorMessage: String?
 
     private let audioCapture = AudioCapture()
     private let transcriptStore = TranscriptStore()
+    private let keychain: any KeychainStoring
     private var client: RealtimeWebSocketClient?
     private var commitTask: Task<Void, Never>?
     private var receiveTask: Task<Void, Never>?
 
-    public init() {}
+    public init(keychain: any KeychainStoring = SystemKeychainStore()) {
+        self.keychain = keychain
+        do {
+            self.apiKeyInput = try keychain.load() ?? ""
+        } catch {
+            self.apiKeyInput = ""
+            self.apiKeyStatus = .error("Keychain error")
+        }
+    }
 
     public var isRecording: Bool {
         status == .recording
@@ -59,14 +90,36 @@ public final class TranscriptionViewModel {
         transcript = ""
     }
 
+    public func saveAPIKey() {
+        let trimmed = apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        apiKeyInput = trimmed
+        if trimmed.isEmpty {
+            do {
+                try keychain.delete()
+                apiKeyStatus = .cleared
+            } catch {
+                apiKeyStatus = .error(error.localizedDescription)
+            }
+            return
+        }
+
+        do {
+            try keychain.save(trimmed)
+            apiKeyStatus = .saved
+        } catch {
+            apiKeyStatus = .error(error.localizedDescription)
+        }
+    }
+
     private func startInternal() async {
         guard status != .recording else { return }
         errorMessage = nil
         status = .connecting
 
-        guard let apiKey = ProcessInfo.processInfo.environment["OPENAI_API_KEY"], !apiKey.isEmpty else {
-            status = .error("Missing OPENAI_API_KEY")
-            errorMessage = "Missing OPENAI_API_KEY"
+        let apiKey = apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !apiKey.isEmpty else {
+            status = .error("Missing API key")
+            errorMessage = "Missing API key"
             return
         }
 
