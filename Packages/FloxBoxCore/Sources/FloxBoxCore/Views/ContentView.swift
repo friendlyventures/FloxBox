@@ -5,6 +5,8 @@ import SwiftUI
 public struct ContentView: View {
     private let configuration: FloxBoxDistributionConfiguration
     @State private var viewModel = TranscriptionViewModel()
+    @State private var shortcutStore = ShortcutStore()
+    @State private var shortcutCoordinator: ShortcutCoordinator?
     @State private var updatesExpanded = false
     @State private var serverVADExpanded = false
     private let tuningColumns = [GridItem(.adaptive(minimum: 200), spacing: 12)]
@@ -67,6 +69,15 @@ public struct ContentView: View {
                                             .foregroundStyle(.red)
                                     }
                                 #endif
+                            }
+                        }
+
+                        sectionCard("Shortcuts") {
+                            if let shortcutCoordinator {
+                                ShortcutRecorderView(
+                                    store: shortcutStore,
+                                    coordinator: shortcutCoordinator,
+                                )
                             }
                         }
 
@@ -230,6 +241,20 @@ public struct ContentView: View {
         .onAppear {
             viewModel.refreshInputDevices()
             configuration.onAppear?()
+
+            if shortcutCoordinator == nil {
+                shortcutCoordinator = ShortcutCoordinator(
+                    store: shortcutStore,
+                    actions: ShortcutActions(
+                        startRecording: { viewModel.start() },
+                        stopRecording: { viewModel.stop() },
+                    ),
+                )
+            }
+            shortcutCoordinator?.start()
+        }
+        .onDisappear {
+            shortcutCoordinator?.stop()
         }
     }
 
