@@ -24,7 +24,7 @@ public final class ShortcutStore {
         {
             shortcuts = decoded
         } else {
-            shortcuts = []
+            shortcuts = Self.defaultShortcuts
         }
     }
 
@@ -47,4 +47,16 @@ public final class ShortcutStore {
         guard let data = try? JSONEncoder().encode(shortcuts) else { return }
         userDefaults.set(data, forKey: storageKey)
     }
+}
+
+private extension ShortcutStore {
+    static let defaultShortcuts: [ShortcutDefinition] = [
+        ShortcutDefinition(
+            id: .pushToTalk,
+            name: "Push To Talk",
+            keyCode: nil,
+            modifiers: [.rightCommand],
+            behavior: .pushToTalk,
+        ),
+    ]
 }

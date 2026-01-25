@@ -3,6 +3,20 @@ import XCTest
 
 @MainActor
 final class ShortcutStoreTests: XCTestCase {
+    func testDefaultsToRightCommandPushToTalkWhenNoStoredData() {
+        let suite = "ShortcutStoreDefaults"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+
+        let store = ShortcutStore(userDefaults: defaults)
+        let shortcut = store.shortcut(for: .pushToTalk)
+
+        XCTAssertEqual(shortcut?.modifiers, [.rightCommand])
+        XCTAssertNil(shortcut?.keyCode)
+        XCTAssertEqual(shortcut?.behavior, .pushToTalk)
+        XCTAssertEqual(shortcut?.name, "Push To Talk")
+    }
+
     func testUpsertReplacesExistingShortcut() {
         let store = ShortcutStore(userDefaults: UserDefaults(suiteName: "ShortcutStoreTests")!)
         let original = ShortcutDefinition(

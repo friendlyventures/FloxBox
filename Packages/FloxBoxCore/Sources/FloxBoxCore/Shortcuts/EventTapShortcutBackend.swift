@@ -12,6 +12,8 @@ public final class EventTapShortcutBackend: ShortcutBackend {
     typealias TapFactory = (CGEventMask, @escaping CGEventTapCallBack, UnsafeMutableRawPointer?) -> CFMachPort?
     typealias RunLoopSourceFactory = (CFMachPort) -> CFRunLoopSource
     typealias RetryTimerFactory = (TimeInterval, @escaping () -> Void) -> RetryTimer
+    typealias ListenEventAccessChecker = () -> Bool
+    typealias ListenEventAccessRequester = () -> Bool
 
     public var onTrigger: ((ShortcutTrigger) -> Void)?
     public var onStatusChange: ((String?) -> Void)?
@@ -24,7 +26,10 @@ public final class EventTapShortcutBackend: ShortcutBackend {
     private let tapFactory: TapFactory
     private let runLoopSourceFactory: RunLoopSourceFactory
     private let retryTimerFactory: RetryTimerFactory
+    private let listenEventAccessChecker: ListenEventAccessChecker
+    private let listenEventAccessRequester: ListenEventAccessRequester
     private var retryTimer: RetryTimer?
+    private var hasRequestedListenEventAccess = false
 
     private var captureCompletion: ((ShortcutDefinition?) -> Void)?
     private var captureId: ShortcutID?
@@ -38,6 +43,8 @@ public final class EventTapShortcutBackend: ShortcutBackend {
             runLoop: CFRunLoopGetMain(),
             runLoopSourceFactory: EventTapShortcutBackend.defaultRunLoopSourceFactory,
             retryTimerFactory: EventTapShortcutBackend.defaultRetryTimerFactory,
+            listenEventAccessChecker: EventTapShortcutBackend.defaultListenEventAccessChecker,
+            listenEventAccessRequester: EventTapShortcutBackend.defaultListenEventAccessRequester,
         )
     }
 
@@ -46,11 +53,15 @@ public final class EventTapShortcutBackend: ShortcutBackend {
         runLoop: CFRunLoop?,
         runLoopSourceFactory: @escaping RunLoopSourceFactory,
         retryTimerFactory: @escaping RetryTimerFactory,
+        listenEventAccessChecker: @escaping ListenEventAccessChecker,
+        listenEventAccessRequester: @escaping ListenEventAccessRequester,
     ) {
         self.tapFactory = tapFactory
         self.runLoop = runLoop
         self.runLoopSourceFactory = runLoopSourceFactory
         self.retryTimerFactory = retryTimerFactory
+        self.listenEventAccessChecker = listenEventAccessChecker
+        self.listenEventAccessRequester = listenEventAccessRequester
     }
 
     public func start() {
@@ -59,6 +70,17 @@ public final class EventTapShortcutBackend: ShortcutBackend {
 
     private func attemptStart() {
         guard eventTap == nil else { return }
+
+        if !listenEventAccessChecker() {
+            if !hasRequestedListenEventAccess {
+                _ = listenEventAccessRequester()
+                hasRequestedListenEventAccess = true
+            }
+            onStatusChange?("Enable Input Monitoring for FloxBox in System Settings")
+            scheduleRetry()
+            return
+        }
+
         let mask = (1 << CGEventType.keyDown.rawValue)
             | (1 << CGEventType.keyUp.rawValue)
             | (1 << CGEventType.flagsChanged.rawValue)
@@ -87,6 +109,7 @@ public final class EventTapShortcutBackend: ShortcutBackend {
         }
         CGEvent.tapEnable(tap: eventTap, enable: true)
         clearRetryTimer()
+        hasRequestedListenEventAccess = false
         onStatusChange?(nil)
     }
 
@@ -214,5 +237,13 @@ private extension EventTapShortcutBackend {
         Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
             handler()
         }
+    }
+
+    static func defaultListenEventAccessChecker() -> Bool {
+        CGPreflightListenEventAccess()
+    }
+
+    static func defaultListenEventAccessRequester() -> Bool {
+        CGRequestListenEventAccess()
     }
 }
