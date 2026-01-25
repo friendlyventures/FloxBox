@@ -9,13 +9,15 @@ final class NotchRecordingState: ObservableObject {
 struct NotchRecordingLayout: Equatable {
     let closedWidth: CGFloat
     let openWidth: CGFloat
+    let containerWidth: CGFloat
     let height: CGFloat
 
     var cornerRadius: CGFloat { height / 2 }
 
     static let placeholder = NotchRecordingLayout(
         closedWidth: 185,
-        openWidth: 405,
+        openWidth: 249,
+        containerWidth: 313,
         height: 28,
     )
 }
@@ -24,47 +26,69 @@ struct NotchRecordingView: View {
     @ObservedObject var state: NotchRecordingState
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
+        let shapeWidth = state.isExpanded ? state.layout.openWidth : state.layout.closedWidth
+        let topRadius = min(state.layout.height / 2, 6)
+        let bottomRadius = min(state.layout.height / 2, 14)
+
+        ZStack(alignment: .top) {
             Color.clear
 
-            RoundedRectangle(cornerRadius: state.layout.cornerRadius, style: .continuous)
-                .fill(Color.black.opacity(0.95))
-                .frame(
-                    width: state.isExpanded ? state.layout.openWidth : state.layout.closedWidth,
-                    height: state.layout.height,
-                )
-                .overlay(alignment: .trailing) {
-                    if state.isRecording {
-                        HStack(spacing: 6) {
-                            PulsingDot()
-                            Text("REC")
-                                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.9))
-                        }
-                        .padding(.horizontal, 12)
-                        .frame(maxHeight: .infinity)
-                        .opacity(state.isExpanded ? 1 : 0)
-                        .animation(.easeInOut(duration: 0.12), value: state.isExpanded)
+            NotchShape(
+                topCornerRadius: topRadius,
+                bottomCornerRadius: bottomRadius,
+            )
+            .fill(Color.black.opacity(0.95))
+            .frame(width: shapeWidth, height: state.layout.height)
+            .overlay(alignment: .center) {
+                if state.isRecording {
+                    HStack(spacing: 8) {
+                        FakeWaveformView()
+                        Spacer(minLength: 8)
+                        VIndicator()
                     }
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .opacity(state.isExpanded ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.12), value: state.isExpanded)
                 }
-                .animation(.snappy(duration: 0.22), value: state.isExpanded)
+            }
+            .animation(.interpolatingSpring(stiffness: 260, damping: 18), value: state.isExpanded)
         }
-        .frame(width: state.layout.openWidth, height: state.layout.height, alignment: .topTrailing)
+        .frame(width: state.layout.containerWidth, height: state.layout.height, alignment: .top)
     }
 }
 
-struct PulsingDot: View {
+struct FakeWaveformView: View {
     var body: some View {
         TimelineView(.animation) { context in
-            let phase = (sin(context.date.timeIntervalSinceReferenceDate * 2.0 * .pi / 1.2) + 1) / 2
-            let scale = 0.6 + (0.4 * phase)
-            let opacity = 0.5 + (0.5 * phase)
+            let time = context.date.timeIntervalSinceReferenceDate
 
-            Circle()
-                .fill(Color.red)
-                .frame(width: 8, height: 8)
-                .scaleEffect(scale)
-                .opacity(opacity)
+            HStack(spacing: 2) {
+                ForEach(0 ..< 6, id: \.self) { index in
+                    let phase = time * 2.2 + Double(index) * 0.55
+                    let normalized = (sin(phase) + 1) / 2
+                    let height = 4 + (normalized * 10)
+
+                    RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                        .fill(Color.white.opacity(0.85))
+                        .frame(width: 2.5, height: height)
+                }
+            }
+            .frame(height: 14, alignment: .center)
         }
+    }
+}
+
+struct VIndicator: View {
+    var body: some View {
+        Text("V")
+            .font(.system(size: 10, weight: .semibold, design: .rounded))
+            .foregroundStyle(.white.opacity(0.85))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                Capsule()
+                    .fill(Color.white.opacity(0.12)),
+            )
     }
 }

@@ -4,7 +4,8 @@ import SwiftUI
 @MainActor
 final class NotchRecordingController {
     private enum Constants {
-        static let openExpansion: CGFloat = 220
+        static let openExpansion: CGFloat = 64
+        static let containerPadding: CGFloat = 32
         static let minimumHeight: CGFloat = 24
         static let closeDelayNanos: UInt64 = 260_000_000
     }
@@ -39,7 +40,7 @@ final class NotchRecordingController {
         ensureWindow()
         window?.orderFrontRegardless()
         state.isRecording = true
-        withAnimation(.snappy(duration: 0.22)) {
+        withAnimation(.interpolatingSpring(stiffness: 260, damping: 18)) {
             state.isExpanded = true
         }
     }
@@ -47,7 +48,7 @@ final class NotchRecordingController {
     func hide() {
         hideTask?.cancel()
         state.isRecording = false
-        withAnimation(.snappy(duration: 0.18)) {
+        withAnimation(.easeInOut(duration: 0.18)) {
             state.isExpanded = false
         }
 
@@ -99,9 +100,11 @@ final class NotchRecordingController {
         let height = max(metrics.closedSize.height, Constants.minimumHeight)
         let closedWidth = metrics.closedSize.width
         let openWidth = closedWidth + Constants.openExpansion
+        let containerWidth = openWidth + (Constants.containerPadding * 2)
         return NotchRecordingLayout(
             closedWidth: closedWidth,
             openWidth: openWidth,
+            containerWidth: containerWidth,
             height: height,
         )
     }
@@ -110,16 +113,9 @@ final class NotchRecordingController {
         let metrics = NotchSizing.metrics(for: screen)
         let screenFrame = metrics.screenFrame
         let height = layout.height
-        let width = layout.openWidth
+        let width = layout.containerWidth
         let originY = screenFrame.maxY - height
-        let originX: CGFloat
-
-        if metrics.hasNotch {
-            let notchRight = screenFrame.midX + (layout.closedWidth / 2)
-            originX = notchRight - width
-        } else {
-            originX = screenFrame.midX - (width / 2)
-        }
+        let originX = screenFrame.midX - (width / 2)
 
         return NSRect(x: originX, y: originY, width: width, height: height)
     }
