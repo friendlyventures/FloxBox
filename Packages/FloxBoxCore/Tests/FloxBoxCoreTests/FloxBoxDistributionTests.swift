@@ -1,5 +1,5 @@
-import XCTest
 @testable import FloxBoxCore
+import XCTest
 
 final class FloxBoxDistributionTests: XCTestCase {
     func testAppStoreLabel() {

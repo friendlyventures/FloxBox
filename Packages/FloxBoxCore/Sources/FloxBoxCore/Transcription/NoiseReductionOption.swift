@@ -12,22 +12,22 @@ public enum NoiseReductionOption: String, CaseIterable, Identifiable {
     public var displayName: String {
         switch self {
         case .off:
-            return "Off"
+            "Off"
         case .nearField:
-            return "Near Field"
+            "Near Field"
         case .farField:
-            return "Far Field"
+            "Far Field"
         }
     }
 
     public var setting: InputAudioNoiseReduction? {
         switch self {
         case .off:
-            return nil
+            nil
         case .nearField:
-            return .nearField
+            .nearField
         case .farField:
-            return .farField
+            .farField
         }
     }
 }

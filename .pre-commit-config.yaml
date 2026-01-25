@@ -1,0 +1,22 @@
+repos:
+  - repo: local
+    hooks:
+      - id: floxbox-format
+        name: floxbox swiftformat
+        entry: mise format
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+      - id: floxbox-lint
+        name: floxbox swiftlint
+        entry: mise lint
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+      - id: floxbox-prepare-commit-msg
+        name: floxbox prepare commit message
+        entry: tools/hooks/prepare-commit-msg
+        language: system
+        stages: [prepare-commit-msg]

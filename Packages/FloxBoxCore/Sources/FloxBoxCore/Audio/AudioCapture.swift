@@ -1,5 +1,5 @@
-import AVFoundation
 import AudioToolbox
+import AVFoundation
 import CoreAudio
 
 public final class AudioCapture {
@@ -11,7 +11,7 @@ public final class AudioCapture {
     private var pendingData = Data()
     private var pendingHandler: Handler?
     private var isRunning = false
-    private let chunkSamples: Int = 3_072
+    private let chunkSamples: Int = 3072
 
     public init() {}
 
@@ -49,21 +49,21 @@ public final class AudioCapture {
         let inputFormat = inputNode.outputFormat(forBus: 0)
         let targetFormat = AVAudioFormat(
             commonFormat: .pcmFormatInt16,
-            sampleRate: 24_000,
+            sampleRate: 24000,
             channels: 1,
-            interleaved: false
+            interleaved: false,
         )!
 
         converter = AVAudioConverter(from: inputFormat, to: targetFormat)
 
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] buffer, _ in
-            guard let self, let converter = self.converter else { return }
+            guard let self, let converter else { return }
 
             let ratio = targetFormat.sampleRate / inputFormat.sampleRate
             let estimatedFrames = Int(ceil(Double(buffer.frameLength) * ratio))
             let convertedBuffer = AVAudioPCMBuffer(
                 pcmFormat: targetFormat,
-                frameCapacity: AVAudioFrameCount(max(1, estimatedFrames))
+                frameCapacity: AVAudioFrameCount(max(1, estimatedFrames)),
             )
             guard let convertedBuffer else { return }
 
@@ -77,7 +77,7 @@ public final class AudioCapture {
             guard error == nil else { return }
             guard convertedBuffer.frameLength > 0 else { return }
 
-            self.appendPCMData(convertedBuffer.pcm16Data())
+            appendPCMData(convertedBuffer.pcm16Data())
         }
 
         engine.prepare()
@@ -100,7 +100,7 @@ public final class AudioCapture {
         let chunkBytes = chunkSamples * MemoryLayout<Int16>.size
         while pendingData.count >= chunkBytes {
             let chunk = pendingData.prefix(chunkBytes)
-            pendingData.removeSubrange(0..<chunkBytes)
+            pendingData.removeSubrange(0 ..< chunkBytes)
             handler(Data(chunk))
         }
     }
@@ -128,7 +128,7 @@ private func setInputDevice(_ deviceID: AudioDeviceID, on inputNode: AVAudioInpu
         kAudioUnitScope_Global,
         0,
         &deviceID,
-        UInt32(MemoryLayout<AudioDeviceID>.size)
+        UInt32(MemoryLayout<AudioDeviceID>.size),
     )
     guard status == noErr else {
         throw AudioCaptureError.audioUnit(status)

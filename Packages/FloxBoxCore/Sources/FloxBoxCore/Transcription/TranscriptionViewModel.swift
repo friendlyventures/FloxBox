@@ -1,6 +1,6 @@
+import CoreAudio
 import Foundation
 import Observation
-import CoreAudio
 
 public enum RecordingStatus: Equatable {
     case idle
@@ -11,13 +11,13 @@ public enum RecordingStatus: Equatable {
     public var label: String {
         switch self {
         case .idle:
-            return "Idle"
+            "Idle"
         case .connecting:
-            return "Connecting"
+            "Connecting"
         case .recording:
-            return "Recording"
+            "Recording"
         case .error:
-            return "Error"
+            "Error"
         }
     }
 }
@@ -31,13 +31,13 @@ public enum APIKeyStatus: Equatable {
     public var message: String? {
         switch self {
         case .idle:
-            return nil
+            nil
         case .saved:
-            return "Saved"
+            "Saved"
         case .cleared:
-            return "Cleared"
-        case .error(let message):
-            return message
+            "Cleared"
+        case let .error(message):
+            message
         }
     }
 }
@@ -71,10 +71,10 @@ public final class TranscriptionViewModel {
     public init(keychain: any KeychainStoring = SystemKeychainStore()) {
         self.keychain = keychain
         do {
-            self.apiKeyInput = try keychain.load() ?? ""
+            apiKeyInput = try keychain.load() ?? ""
         } catch {
-            self.apiKeyInput = ""
-            self.apiKeyStatus = .error("Keychain error")
+            apiKeyInput = ""
+            apiKeyStatus = .error("Keychain error")
         }
     }
 
@@ -149,7 +149,7 @@ public final class TranscriptionViewModel {
             noiseReduction: noiseReduction.setting,
             vadMode: vadMode,
             serverVAD: serverVAD,
-            semanticVAD: semanticVAD
+            semanticVAD: semanticVAD,
         )
 
         do {
@@ -163,7 +163,7 @@ public final class TranscriptionViewModel {
         receiveTask = Task { [weak self] in
             guard let self else { return }
             for await event in client.events {
-                await self.handle(event)
+                await handle(event)
             }
         }
 
@@ -208,20 +208,20 @@ public final class TranscriptionViewModel {
         commitTask = Task { [weak self] in
             while let self, !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: UInt64(interval) * 1_000_000_000)
-                try? await self.client?.commitAudio()
+                try? await client?.commitAudio()
             }
         }
     }
 
     private func handle(_ event: RealtimeServerEvent) async {
         switch event {
-        case .inputAudioCommitted(let committed):
+        case let .inputAudioCommitted(committed):
             transcriptStore.applyCommitted(committed)
-        case .transcriptionDelta(let delta):
+        case let .transcriptionDelta(delta):
             transcriptStore.applyDelta(delta)
-        case .transcriptionCompleted(let completed):
+        case let .transcriptionCompleted(completed):
             transcriptStore.applyCompleted(completed)
-        case .error(let message):
+        case let .error(message):
             status = .error(message)
             errorMessage = message
         case .unknown:

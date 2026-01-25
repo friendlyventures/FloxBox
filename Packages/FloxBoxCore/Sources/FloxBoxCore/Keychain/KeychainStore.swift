@@ -17,7 +17,7 @@ public struct SystemKeychainStore: KeychainStoring {
 
     public init(
         service: String = Bundle.main.bundleIdentifier ?? "FloxBox",
-        account: String = "openai-api-key"
+        account: String = "openai-api-key",
     ) {
         self.service = service
         self.account = account
@@ -54,7 +54,7 @@ public struct SystemKeychainStore: KeychainStoring {
             kSecAttrAccount as String: account,
         ]
         let attributes: [String: Any] = [
-            kSecValueData as String: data
+            kSecValueData as String: data,
         ]
 
         let status = SecItemAdd(query.merging(attributes) { $1 } as CFDictionary, nil)

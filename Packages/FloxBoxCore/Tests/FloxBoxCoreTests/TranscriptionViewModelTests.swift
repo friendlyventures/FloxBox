@@ -1,5 +1,5 @@
-import XCTest
 @testable import FloxBoxCore
+import XCTest
 
 @MainActor
 final class TranscriptionViewModelTests: XCTestCase {

@@ -1,6 +1,6 @@
+@testable import FloxBoxCore
 import SwiftUI
 import XCTest
-@testable import FloxBoxCore
 
 @MainActor
 final class ContentViewTests: XCTestCase {

@@ -25,7 +25,7 @@ public final class RealtimeWebSocketClient {
         self.apiKey = apiKey
         self.urlSession = urlSession
         var continuation: AsyncStream<RealtimeServerEvent>.Continuation!
-        self.stream = AsyncStream { continuation = $0 }
+        stream = AsyncStream { continuation = $0 }
         self.continuation = continuation
     }
 
@@ -38,9 +38,9 @@ public final class RealtimeWebSocketClient {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("realtime=v1", forHTTPHeaderField: "OpenAI-Beta")
 
-#if DEBUG
-        debugLog("Connecting to \(RealtimeAPI.baseURL.absoluteString)")
-#endif
+        #if DEBUG
+            debugLog("Connecting to \(RealtimeAPI.baseURL.absoluteString)")
+        #endif
         let socket = urlSession.webSocketTask(with: request)
         self.socket = socket
         socket.resume()
@@ -64,21 +64,21 @@ public final class RealtimeWebSocketClient {
         continuation.finish()
     }
 
-    private func send<Event: Encodable>(_ event: Event) async throws {
+    private func send(_ event: some Encodable) async throws {
         guard let socket else { return }
         let payload = try JSONEncoder().encode(event)
         guard let text = String(data: payload, encoding: .utf8) else {
-#if DEBUG
-            debugLog("Failed to encode payload as UTF-8 string")
-#endif
+            #if DEBUG
+                debugLog("Failed to encode payload as UTF-8 string")
+            #endif
             return
         }
         do {
             try await socket.send(.string(text))
         } catch {
-#if DEBUG
-            debugLog("Send failed: \(error)")
-#endif
+            #if DEBUG
+                debugLog("Send failed: \(error)")
+            #endif
             throw error
         }
     }
@@ -91,9 +91,9 @@ public final class RealtimeWebSocketClient {
                     let message = try await socket.receive()
                     let data: Data
                     switch message {
-                    case .data(let payload):
+                    case let .data(payload):
                         data = payload
-                    case .string(let text):
+                    case let .string(text):
                         data = Data(text.utf8)
                     @unknown default:
                         continue
@@ -102,15 +102,15 @@ public final class RealtimeWebSocketClient {
                     if let event = try? RealtimeEventDecoder.decode(data) {
                         self?.continuation.yield(event)
                     } else {
-#if DEBUG
-                        let preview = String(data: data, encoding: .utf8) ?? "<non-utf8 payload>"
-                        self?.debugLog("Unknown event payload: \(preview)")
-#endif
+                        #if DEBUG
+                            let preview = String(data: data, encoding: .utf8) ?? "<non-utf8 payload>"
+                            self?.debugLog("Unknown event payload: \(preview)")
+                        #endif
                     }
                 } catch {
-#if DEBUG
-                    self?.debugLog("Receive failed: \(error)")
-#endif
+                    #if DEBUG
+                        self?.debugLog("Receive failed: \(error)")
+                    #endif
                     self?.continuation.yield(.error(error.localizedDescription))
                     break
                 }
@@ -118,9 +118,9 @@ public final class RealtimeWebSocketClient {
         }
     }
 
-#if DEBUG
-    private func debugLog(_ message: String) {
-        print("[Realtime] \(message)")
-    }
-#endif
+    #if DEBUG
+        private func debugLog(_ message: String) {
+            print("[Realtime] \(message)")
+        }
+    #endif
 }

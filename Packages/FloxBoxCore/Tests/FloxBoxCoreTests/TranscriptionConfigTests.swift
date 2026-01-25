@@ -1,5 +1,5 @@
-import XCTest
 @testable import FloxBoxCore
+import XCTest
 
 final class TranscriptionConfigTests: XCTestCase {
     func testModelListIsExact() {
@@ -11,7 +11,7 @@ final class TranscriptionConfigTests: XCTestCase {
                 "gpt-4o-mini-transcribe",
                 "gpt-4o-mini-transcribe-2025-12-15",
                 "whisper-1",
-            ]
+            ],
         )
     }
 
@@ -33,7 +33,7 @@ final class TranscriptionConfigTests: XCTestCase {
                 .seconds(3),
                 .seconds(4),
                 .seconds(5),
-            ]
+            ],
         )
         XCTAssertEqual(ManualCommitInterval.defaultInterval, .seconds(2))
     }

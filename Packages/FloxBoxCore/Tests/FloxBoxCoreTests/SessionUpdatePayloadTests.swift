@@ -1,5 +1,5 @@
-import XCTest
 @testable import FloxBoxCore
+import XCTest
 
 final class SessionUpdatePayloadTests: XCTestCase {
     func testTurnDetectionDisabledEncodesNull() throws {
@@ -8,7 +8,7 @@ final class SessionUpdatePayloadTests: XCTestCase {
             language: .english,
             vadMode: .off,
             serverVAD: .init(),
-            semanticVAD: .init()
+            semanticVAD: .init(),
         )
         let update = RealtimeTranscriptionSessionUpdate(configuration: config)
         let data = try JSONEncoder().encode(update)
@@ -23,7 +23,7 @@ final class SessionUpdatePayloadTests: XCTestCase {
             language: .english,
             vadMode: .server,
             serverVAD: .init(threshold: 0.2, prefixPaddingMs: 150, silenceDurationMs: 900, idleTimeoutMs: 5000),
-            semanticVAD: .init()
+            semanticVAD: .init(),
         )
         let update = RealtimeTranscriptionSessionUpdate(configuration: config)
         let data = try JSONEncoder().encode(update)
@@ -43,7 +43,7 @@ final class SessionUpdatePayloadTests: XCTestCase {
             language: .german,
             vadMode: .off,
             serverVAD: .init(),
-            semanticVAD: .init()
+            semanticVAD: .init(),
         )
         let update = RealtimeTranscriptionSessionUpdate(configuration: config)
         let data = try JSONEncoder().encode(update)
@@ -60,7 +60,7 @@ final class SessionUpdatePayloadTests: XCTestCase {
             noiseReduction: .nearField,
             vadMode: .off,
             serverVAD: .init(),
-            semanticVAD: .init()
+            semanticVAD: .init(),
         )
         let update = RealtimeTranscriptionSessionUpdate(configuration: config)
         let data = try JSONEncoder().encode(update)
@@ -77,7 +77,7 @@ final class SessionUpdatePayloadTests: XCTestCase {
             noiseReduction: nil,
             vadMode: .off,
             serverVAD: .init(),
-            semanticVAD: .init()
+            semanticVAD: .init(),
         )
         let update = RealtimeTranscriptionSessionUpdate(configuration: config)
         let data = try JSONEncoder().encode(update)

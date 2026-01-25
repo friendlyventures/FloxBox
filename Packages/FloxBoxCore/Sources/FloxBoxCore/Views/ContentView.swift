@@ -1,6 +1,6 @@
+import CoreAudio
 import Observation
 import SwiftUI
-import CoreAudio
 
 public struct ContentView: View {
     private let configuration: FloxBoxDistributionConfiguration
@@ -21,7 +21,7 @@ public struct ContentView: View {
                     APIKeyRow(
                         apiKey: $viewModel.apiKeyInput,
                         status: $viewModel.apiKeyStatus,
-                        onSave: viewModel.saveAPIKey
+                        onSave: viewModel.saveAPIKey,
                     )
                 }
 
@@ -43,13 +43,13 @@ public struct ContentView: View {
                                 .foregroundStyle(statusColor(for: viewModel.status))
                         }
 
-#if DEBUG
-                        if let error = viewModel.errorMessage {
-                            Text("Debug Error: \(error)")
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                        }
-#endif
+                        #if DEBUG
+                            if let error = viewModel.errorMessage {
+                                Text("Debug Error: \(error)")
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                            }
+                        #endif
                     }
                 }
 
@@ -116,12 +116,21 @@ public struct ContentView: View {
                     }
                 }
 
+                if let updatesView = configuration.updatesView {
+                    GroupBox("Updates") {
+                        updatesView
+                    }
+                }
+
                 if viewModel.vadMode == .server {
                     GroupBox("Server VAD Tuning") {
                         LazyVGrid(columns: tuningColumns, alignment: .leading, spacing: 12) {
                             OptionalDoubleField(title: "Threshold", value: $viewModel.serverVAD.threshold)
                             OptionalIntField(title: "Prefix Padding (ms)", value: $viewModel.serverVAD.prefixPaddingMs)
-                            OptionalIntField(title: "Silence Duration (ms)", value: $viewModel.serverVAD.silenceDurationMs)
+                            OptionalIntField(
+                                title: "Silence Duration (ms)",
+                                value: $viewModel.serverVAD.silenceDurationMs,
+                            )
                             OptionalIntField(title: "Idle Timeout (ms)", value: $viewModel.serverVAD.idleTimeoutMs)
                         }
                     }
@@ -142,6 +151,7 @@ public struct ContentView: View {
         .frame(minWidth: 720, minHeight: 560)
         .onAppear {
             viewModel.refreshInputDevices()
+            configuration.onAppear?()
         }
     }
 
@@ -198,9 +208,9 @@ struct APIKeyRow: View {
     private func statusColor(for status: APIKeyStatus) -> Color {
         switch status {
         case .error:
-            return .red
+            .red
         default:
-            return .secondary
+            .secondary
         }
     }
 }
@@ -212,8 +222,8 @@ struct OptionalDoubleField: View {
 
     init(title: String, value: Binding<Double?>) {
         self.title = title
-        self._value = value
-        self._text = State(initialValue: value.wrappedValue.map { String($0) } ?? "")
+        _value = value
+        _text = State(initialValue: value.wrappedValue.map { String($0) } ?? "")
     }
 
     var body: some View {
@@ -232,8 +242,8 @@ struct OptionalIntField: View {
 
     init(title: String, value: Binding<Int?>) {
         self.title = title
-        self._value = value
-        self._text = State(initialValue: value.wrappedValue.map { String($0) } ?? "")
+        _value = value
+        _text = State(initialValue: value.wrappedValue.map { String($0) } ?? "")
     }
 
     var body: some View {

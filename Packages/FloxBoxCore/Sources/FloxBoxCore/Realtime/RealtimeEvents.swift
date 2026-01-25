@@ -59,11 +59,11 @@ public enum RealtimeEventDecoder {
         let envelope = try JSONDecoder().decode(RealtimeEventEnvelope.self, from: data)
         switch envelope.type {
         case "conversation.item.input_audio_transcription.delta":
-            return .transcriptionDelta(try JSONDecoder().decode(TranscriptionDeltaEvent.self, from: data))
+            return try .transcriptionDelta(JSONDecoder().decode(TranscriptionDeltaEvent.self, from: data))
         case "conversation.item.input_audio_transcription.completed":
-            return .transcriptionCompleted(try JSONDecoder().decode(TranscriptionCompletedEvent.self, from: data))
+            return try .transcriptionCompleted(JSONDecoder().decode(TranscriptionCompletedEvent.self, from: data))
         case "input_audio_buffer.committed":
-            return .inputAudioCommitted(try JSONDecoder().decode(InputAudioCommittedEvent.self, from: data))
+            return try .inputAudioCommitted(JSONDecoder().decode(InputAudioCommittedEvent.self, from: data))
         case "error":
             let error = try JSONDecoder().decode(RealtimeErrorEvent.self, from: data)
             return .error(error.error.message)

@@ -1,6 +1,6 @@
+@testable import FloxBoxCore
 import Foundation
 import XCTest
-@testable import FloxBoxCore
 
 final class RealtimeIntegrationTests: XCTestCase {
     func testRealtimeTranscriptionFromFixture() async throws {
@@ -16,7 +16,7 @@ final class RealtimeIntegrationTests: XCTestCase {
         let wavData = try Data(contentsOf: fixtureURL)
         let wavFile = try WAVFile(data: wavData)
 
-        XCTAssertEqual(wavFile.format.sampleRate, 24_000)
+        XCTAssertEqual(wavFile.format.sampleRate, 24000)
         XCTAssertEqual(wavFile.format.channels, 1)
         XCTAssertEqual(wavFile.format.bitsPerSample, 16)
         XCTAssertFalse(wavFile.pcmData.isEmpty)
@@ -30,7 +30,7 @@ final class RealtimeIntegrationTests: XCTestCase {
             language: .defaultLanguage,
             vadMode: .off,
             serverVAD: .init(),
-            semanticVAD: .init()
+            semanticVAD: .init(),
         )
         try await client.sendSessionUpdate(RealtimeTranscriptionSessionUpdate(configuration: configuration))
 
@@ -52,23 +52,23 @@ private enum IntegrationTestError: Error {
 
 private func awaitTranscript(
     from events: AsyncStream<RealtimeServerEvent>,
-    timeoutSeconds: UInt64
+    timeoutSeconds: UInt64,
 ) async throws -> String {
     try await withThrowingTaskGroup(of: String.self) { group in
         group.addTask {
             var collected = ""
             for await event in events {
                 switch event {
-                case .transcriptionDelta(let delta):
+                case let .transcriptionDelta(delta):
                     collected.append(delta.delta)
-                case .transcriptionCompleted(let completed):
+                case let .transcriptionCompleted(completed):
                     if !completed.transcript.isEmpty {
                         return completed.transcript
                     }
                     if !collected.isEmpty {
                         return collected
                     }
-                case .error(let message):
+                case let .error(message):
                     throw IntegrationTestError.serverError(message)
                 case .inputAudioCommitted, .unknown:
                     continue
@@ -108,10 +108,10 @@ private struct WAVFile {
         guard data.count >= 12 else {
             throw WAVError.invalidHeader
         }
-        guard data.asciiString(in: 0..<4) == "RIFF" else {
+        guard data.asciiString(in: 0 ..< 4) == "RIFF" else {
             throw WAVError.invalidHeader
         }
-        guard data.asciiString(in: 8..<12) == "WAVE" else {
+        guard data.asciiString(in: 8 ..< 12) == "WAVE" else {
             throw WAVError.invalidHeader
         }
 
@@ -120,7 +120,7 @@ private struct WAVFile {
         var offset = 12
 
         while offset + 8 <= data.count {
-            let chunkID = data.asciiString(in: offset..<(offset + 4))
+            let chunkID = data.asciiString(in: offset ..< (offset + 4))
             let chunkSize = Int(data.uint32LE(at: offset + 4))
             let chunkStart = offset + 8
             let chunkEnd = chunkStart + chunkSize
@@ -138,7 +138,7 @@ private struct WAVFile {
                 }
                 format = Format(sampleRate: sampleRate, channels: channels, bitsPerSample: bitsPerSample)
             } else if chunkID == "data" {
-                pcmData = data.subdata(in: chunkStart..<chunkEnd)
+                pcmData = data.subdata(in: chunkStart ..< chunkEnd)
             }
 
             offset = chunkEnd + (chunkSize % 2)
@@ -164,12 +164,12 @@ private extension Data {
     }
 
     func uint16LE(at offset: Int) -> UInt16 {
-        let slice = self[offset..<(offset + 2)]
+        let slice = self[offset ..< (offset + 2)]
         return UInt16(slice[slice.startIndex]) | UInt16(slice[slice.startIndex + 1]) << 8
     }
 
     func uint32LE(at offset: Int) -> UInt32 {
-        let slice = self[offset..<(offset + 4)]
+        let slice = self[offset ..< (offset + 4)]
         return UInt32(slice[slice.startIndex])
             | UInt32(slice[slice.startIndex + 1]) << 8
             | UInt32(slice[slice.startIndex + 2]) << 16
@@ -182,7 +182,7 @@ private extension Data {
         var offset = 0
         while offset < count {
             let end = Swift.min(offset + size, count)
-            chunks.append(subdata(in: offset..<end))
+            chunks.append(subdata(in: offset ..< end))
             offset = end
         }
         return chunks

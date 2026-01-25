@@ -10,11 +10,11 @@ public enum VADMode: String, CaseIterable, Identifiable {
     public var displayName: String {
         switch self {
         case .off:
-            return "Off"
+            "Off"
         case .server:
-            return "Server VAD"
+            "Server VAD"
         case .semantic:
-            return "Semantic VAD"
+            "Semantic VAD"
         }
     }
 }
@@ -43,18 +43,18 @@ public enum ManualCommitInterval: Equatable, CaseIterable, Identifiable, Hashabl
     public var label: String {
         switch self {
         case .off:
-            return "Off"
-        case .seconds(let value):
-            return "\(value)s"
+            "Off"
+        case let .seconds(value):
+            "\(value)s"
         }
     }
 
     public var seconds: Int? {
         switch self {
         case .off:
-            return nil
-        case .seconds(let value):
-            return value
+            nil
+        case let .seconds(value):
+            value
         }
     }
 }
@@ -69,7 +69,7 @@ public struct ServerVADTuning: Equatable {
         threshold: Double? = nil,
         prefixPaddingMs: Int? = nil,
         silenceDurationMs: Int? = nil,
-        idleTimeoutMs: Int? = nil
+        idleTimeoutMs: Int? = nil,
     ) {
         self.threshold = threshold
         self.prefixPaddingMs = prefixPaddingMs

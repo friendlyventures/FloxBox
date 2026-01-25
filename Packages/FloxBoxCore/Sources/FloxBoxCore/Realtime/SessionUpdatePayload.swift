@@ -14,7 +14,7 @@ public struct TranscriptionSessionConfiguration: Equatable {
         noiseReduction: InputAudioNoiseReduction? = .farField,
         vadMode: VADMode,
         serverVAD: ServerVADTuning,
-        semanticVAD: SemanticVADTuning
+        semanticVAD: SemanticVADTuning,
     ) {
         self.model = model
         self.language = language
@@ -27,11 +27,11 @@ public struct TranscriptionSessionConfiguration: Equatable {
     public var turnDetectionSetting: TurnDetectionSetting {
         switch vadMode {
         case .off:
-            return .disabled
+            .disabled
         case .server:
-            return .server(serverVAD)
+            .server(serverVAD)
         case .semantic:
-            return .semantic(semanticVAD)
+            .semantic(semanticVAD)
         }
     }
 }
@@ -41,15 +41,15 @@ public struct RealtimeTranscriptionSessionUpdate: Encodable, Equatable {
     public let session: Session
 
     public init(configuration: TranscriptionSessionConfiguration) {
-        self.session = Session(
+        session = Session(
             inputAudioFormat: "pcm16",
             inputAudioTranscription: Transcription(
                 model: configuration.model.rawValue,
-                language: configuration.language.code
+                language: configuration.language.code,
             ),
             inputAudioNoiseReduction: configuration.noiseReduction,
             turnDetection: configuration.turnDetectionSetting,
-            include: ["item.input_audio_transcription.logprobs"]
+            include: ["item.input_audio_transcription.logprobs"],
         )
     }
 
@@ -97,23 +97,23 @@ public enum TurnDetectionSetting: Encodable, Equatable {
         case .disabled:
             var container = encoder.singleValueContainer()
             try container.encodeNil()
-        case .server(let tuning):
+        case let .server(tuning):
             try TurnDetectionPayload(
                 type: "server_vad",
                 threshold: tuning.threshold,
                 prefixPaddingMs: tuning.prefixPaddingMs,
                 silenceDurationMs: tuning.silenceDurationMs,
                 idleTimeoutMs: tuning.idleTimeoutMs,
-                eagerness: nil
+                eagerness: nil,
             ).encode(to: encoder)
-        case .semantic(let tuning):
+        case let .semantic(tuning):
             try TurnDetectionPayload(
                 type: "semantic_vad",
                 threshold: nil,
                 prefixPaddingMs: nil,
                 silenceDurationMs: nil,
                 idleTimeoutMs: nil,
-                eagerness: tuning.eagerness?.rawValue
+                eagerness: tuning.eagerness?.rawValue,
             ).encode(to: encoder)
         }
     }

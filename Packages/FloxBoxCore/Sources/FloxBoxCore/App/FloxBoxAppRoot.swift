@@ -2,7 +2,7 @@ import SwiftUI
 
 public enum FloxBoxAppRoot {
     public static func makeScene(
-        configuration: FloxBoxDistributionConfiguration
+        configuration: FloxBoxDistributionConfiguration,
     ) -> some Scene {
         WindowGroup {
             ContentView(configuration: configuration)

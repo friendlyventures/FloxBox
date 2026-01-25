@@ -31,7 +31,7 @@ public enum AudioInputDeviceProvider {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultInputDevice,
             mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
+            mElement: kAudioObjectPropertyElementMain,
         )
         let status = AudioObjectGetPropertyData(
             AudioObjectID(kAudioObjectSystemObject),
@@ -39,7 +39,7 @@ public enum AudioInputDeviceProvider {
             0,
             nil,
             &dataSize,
-            &deviceID
+            &deviceID,
         )
         guard status == noErr else { return nil }
         return deviceID
@@ -50,7 +50,7 @@ private func allDeviceIDs() -> [AudioDeviceID] {
     var address = AudioObjectPropertyAddress(
         mSelector: kAudioHardwarePropertyDevices,
         mScope: kAudioObjectPropertyScopeGlobal,
-        mElement: kAudioObjectPropertyElementMain
+        mElement: kAudioObjectPropertyElementMain,
     )
     var dataSize: UInt32 = 0
     let status = AudioObjectGetPropertyDataSize(
@@ -58,7 +58,7 @@ private func allDeviceIDs() -> [AudioDeviceID] {
         &address,
         0,
         nil,
-        &dataSize
+        &dataSize,
     )
     guard status == noErr else { return [] }
     let deviceCount = Int(dataSize) / MemoryLayout<AudioDeviceID>.size
@@ -69,7 +69,7 @@ private func allDeviceIDs() -> [AudioDeviceID] {
         0,
         nil,
         &dataSize,
-        &deviceIDs
+        &deviceIDs,
     )
     guard readStatus == noErr else { return [] }
     return deviceIDs
@@ -79,7 +79,7 @@ private func deviceHasInput(_ deviceID: AudioDeviceID) -> Bool {
     var address = AudioObjectPropertyAddress(
         mSelector: kAudioDevicePropertyStreamConfiguration,
         mScope: kAudioDevicePropertyScopeInput,
-        mElement: kAudioObjectPropertyElementMain
+        mElement: kAudioObjectPropertyElementMain,
     )
     var dataSize: UInt32 = 0
     let status = AudioObjectGetPropertyDataSize(
@@ -87,12 +87,12 @@ private func deviceHasInput(_ deviceID: AudioDeviceID) -> Bool {
         &address,
         0,
         nil,
-        &dataSize
+        &dataSize,
     )
     guard status == noErr else { return false }
     let bufferListPointer = UnsafeMutableRawPointer.allocate(
         byteCount: Int(dataSize),
-        alignment: MemoryLayout<AudioBufferList>.alignment
+        alignment: MemoryLayout<AudioBufferList>.alignment,
     )
     defer { bufferListPointer.deallocate() }
     let readStatus = AudioObjectGetPropertyData(
@@ -101,7 +101,7 @@ private func deviceHasInput(_ deviceID: AudioDeviceID) -> Bool {
         0,
         nil,
         &dataSize,
-        bufferListPointer
+        bufferListPointer,
     )
     guard readStatus == noErr else { return false }
     let audioBufferList = bufferListPointer.assumingMemoryBound(to: AudioBufferList.self)
@@ -114,7 +114,7 @@ private func deviceName(_ deviceID: AudioDeviceID) -> String? {
     var address = AudioObjectPropertyAddress(
         mSelector: kAudioObjectPropertyName,
         mScope: kAudioObjectPropertyScopeGlobal,
-        mElement: kAudioObjectPropertyElementMain
+        mElement: kAudioObjectPropertyElementMain,
     )
     var name: Unmanaged<CFString>?
     var dataSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
@@ -124,7 +124,7 @@ private func deviceName(_ deviceID: AudioDeviceID) -> String? {
         0,
         nil,
         &dataSize,
-        &name
+        &name,
     )
     guard status == noErr, let name else { return nil }
     return name.takeUnretainedValue() as String
@@ -134,7 +134,7 @@ private func deviceUID(_ deviceID: AudioDeviceID) -> String? {
     var address = AudioObjectPropertyAddress(
         mSelector: kAudioDevicePropertyDeviceUID,
         mScope: kAudioObjectPropertyScopeGlobal,
-        mElement: kAudioObjectPropertyElementMain
+        mElement: kAudioObjectPropertyElementMain,
     )
     var uid: Unmanaged<CFString>?
     var dataSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
@@ -144,7 +144,7 @@ private func deviceUID(_ deviceID: AudioDeviceID) -> String? {
         0,
         nil,
         &dataSize,
-        &uid
+        &uid,
     )
     guard status == noErr, let uid else { return nil }
     return uid.takeUnretainedValue() as String

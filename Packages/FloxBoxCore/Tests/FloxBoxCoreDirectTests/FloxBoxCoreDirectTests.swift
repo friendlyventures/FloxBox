@@ -1,5 +1,5 @@
-import XCTest
 @testable import FloxBoxCoreDirect
+import XCTest
 
 final class FloxBoxCoreDirectTests: XCTestCase {
     func testDirectConfigLabel() {

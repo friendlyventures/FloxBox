@@ -5,10 +5,10 @@
 //  Created by Shayne Sweeney on 1/24/26.
 //
 
-import SwiftUI
 import FloxBoxCore
+import SwiftUI
 #if !APP_STORE
-import FloxBoxCoreDirect
+    import FloxBoxCoreDirect
 #endif
 
 @main
@@ -17,9 +17,9 @@ struct FloxBoxApp: App {
 
     init() {
         #if APP_STORE
-        configuration = .appStore
+            configuration = .appStore
         #else
-        configuration = FloxBoxDirectServices.configuration()
+            configuration = FloxBoxDirectServices.configuration()
         #endif
     }
 

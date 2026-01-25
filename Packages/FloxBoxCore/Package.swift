@@ -8,30 +8,35 @@ let package = Package(
         .library(name: "FloxBoxCore", targets: ["FloxBoxCore"]),
         .library(name: "FloxBoxCoreDirect", targets: ["FloxBoxCoreDirect"]),
     ],
-    dependencies: [],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.8.1"),
+    ],
     targets: [
         .target(
             name: "FloxBoxCore",
-            path: "Sources/FloxBoxCore"
+            path: "Sources/FloxBoxCore",
         ),
         .target(
             name: "FloxBoxCoreDirect",
-            dependencies: ["FloxBoxCore"],
+            dependencies: [
+                "FloxBoxCore",
+                .product(name: "Sparkle", package: "Sparkle"),
+            ],
             path: "Sources/FloxBoxCoreDirect",
             swiftSettings: [
                 .define("DIRECT_DISTRIBUTION"),
-            ]
+            ],
         ),
         .testTarget(
             name: "FloxBoxCoreTests",
             dependencies: ["FloxBoxCore"],
             path: "Tests/FloxBoxCoreTests",
-            resources: [.process("Fixtures")]
+            resources: [.process("Fixtures")],
         ),
         .testTarget(
             name: "FloxBoxCoreDirectTests",
             dependencies: ["FloxBoxCoreDirect"],
-            path: "Tests/FloxBoxCoreDirectTests"
+            path: "Tests/FloxBoxCoreDirectTests",
         ),
-    ]
+    ],
 )

@@ -12,11 +12,11 @@ public enum TranscriptionLanguage: String, CaseIterable, Identifiable {
     public var displayName: String {
         switch self {
         case .english:
-            return "English"
+            "English"
         case .spanish:
-            return "Spanish"
+            "Spanish"
         case .german:
-            return "German"
+            "German"
         }
     }
 
