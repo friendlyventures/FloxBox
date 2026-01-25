@@ -1,6 +1,7 @@
 import FloxBoxCore
 import SwiftUI
 
+@MainActor
 public enum FloxBoxDirectServices {
     private static let updaterController = UpdaterController()
 
@@ -9,7 +10,9 @@ public enum FloxBoxDirectServices {
             label: FloxBoxDistributionConfiguration.direct.label,
             updatesView: AnyView(UpdatesView(updaterController: updaterController)),
             onAppear: {
-                updaterController.checkForUpdatesOnLaunchIfNeeded()
+                Task { @MainActor in
+                    updaterController.checkForUpdatesOnLaunchIfNeeded()
+                }
             },
         )
     }

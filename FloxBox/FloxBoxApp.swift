@@ -12,6 +12,7 @@ import SwiftUI
 #endif
 
 @main
+@MainActor
 struct FloxBoxApp: App {
     private let configuration: FloxBoxDistributionConfiguration
 
