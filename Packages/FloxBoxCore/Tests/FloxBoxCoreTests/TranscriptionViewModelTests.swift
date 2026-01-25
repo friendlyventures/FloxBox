@@ -7,6 +7,7 @@ final class TranscriptionViewModelTests: XCTestCase {
         let viewModel = TranscriptionViewModel(keychain: InMemoryKeychainStore())
         XCTAssertEqual(viewModel.model, .defaultModel)
         XCTAssertEqual(viewModel.language, .defaultLanguage)
+        XCTAssertEqual(viewModel.noiseReduction, .defaultOption)
         XCTAssertNil(viewModel.selectedInputDeviceID)
         XCTAssertEqual(viewModel.vadMode, .server)
         XCTAssertEqual(viewModel.manualCommitInterval, .defaultInterval)

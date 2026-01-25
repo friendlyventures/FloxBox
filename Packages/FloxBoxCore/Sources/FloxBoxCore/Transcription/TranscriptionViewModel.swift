@@ -47,6 +47,7 @@ public enum APIKeyStatus: Equatable {
 public final class TranscriptionViewModel {
     public var model: TranscriptionModel = .defaultModel
     public var language: TranscriptionLanguage = .defaultLanguage
+    public var noiseReduction: NoiseReductionOption = .defaultOption
     public var availableInputDevices: [AudioInputDevice] = AudioInputDeviceProvider.availableDevices()
     public var selectedInputDeviceID: AudioDeviceID?
     public var vadMode: VADMode = .server
@@ -145,6 +146,7 @@ public final class TranscriptionViewModel {
         let config = TranscriptionSessionConfiguration(
             model: model,
             language: language,
+            noiseReduction: noiseReduction.setting,
             vadMode: vadMode,
             serverVAD: serverVAD,
             semanticVAD: semanticVAD

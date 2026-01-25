@@ -74,6 +74,15 @@ public struct ContentView: View {
                                 .labelsHidden()
                             }
 
+                            LabeledContent("Noise Reduction") {
+                                Picker("Noise Reduction", selection: $viewModel.noiseReduction) {
+                                    ForEach(NoiseReductionOption.allCases) { option in
+                                        Text(option.displayName).tag(option)
+                                    }
+                                }
+                                .labelsHidden()
+                            }
+
                             LabeledContent("Mic") {
                                 Picker("Mic", selection: $viewModel.selectedInputDeviceID) {
                                     Text("System Default").tag(AudioDeviceID?.none)
