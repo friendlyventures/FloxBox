@@ -81,8 +81,8 @@ struct FakeWaveformView: View {
 
 struct VIndicator: View {
     var body: some View {
-        Text("V")
-            .font(.system(size: 10, weight: .semibold, design: .rounded))
+        Image(systemName: "text.word.spacing")
+            .font(.system(size: 11, weight: .semibold))
             .foregroundStyle(.white.opacity(0.85))
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
