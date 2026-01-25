@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import CoreAudio
 
 public enum RecordingStatus: Equatable {
     case idle
@@ -46,6 +47,8 @@ public enum APIKeyStatus: Equatable {
 public final class TranscriptionViewModel {
     public var model: TranscriptionModel = .defaultModel
     public var language: TranscriptionLanguage = .defaultLanguage
+    public var availableInputDevices: [AudioInputDevice] = AudioInputDeviceProvider.availableDevices()
+    public var selectedInputDeviceID: AudioDeviceID?
     public var vadMode: VADMode = .server
     public var manualCommitInterval: ManualCommitInterval = .defaultInterval
     public var serverVAD: ServerVADTuning = .init()
@@ -89,6 +92,10 @@ public final class TranscriptionViewModel {
     public func clearTranscript() {
         transcriptStore.reset()
         transcript = ""
+    }
+
+    public func refreshInputDevices() {
+        availableInputDevices = AudioInputDeviceProvider.availableDevices()
     }
 
     public func saveAPIKey() {
@@ -159,6 +166,7 @@ public final class TranscriptionViewModel {
         }
 
         do {
+            audioCapture.setPreferredInputDevice(selectedInputDeviceID)
             try audioCapture.start { [weak self] data in
                 guard let self, let client = self.client else { return }
                 Task {

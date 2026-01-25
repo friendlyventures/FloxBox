@@ -1,13 +1,20 @@
 import AVFoundation
+import AudioToolbox
+import CoreAudio
 
 public final class AudioCapture {
     public typealias Handler = (Data) -> Void
 
     private let engine = AVAudioEngine()
     private var converter: AVAudioConverter?
+    private var preferredInputDeviceID: AudioDeviceID?
     private var isRunning = false
 
     public init() {}
+
+    public func setPreferredInputDevice(_ deviceID: AudioDeviceID?) {
+        preferredInputDeviceID = deviceID
+    }
 
     public static func requestPermission() async -> Bool {
         let status = AVCaptureDevice.authorizationStatus(for: .audio)
@@ -31,6 +38,9 @@ public final class AudioCapture {
         guard !isRunning else { return }
 
         let inputNode = engine.inputNode
+        if let deviceID = preferredInputDeviceID {
+            try setInputDevice(deviceID, on: inputNode)
+        }
         let inputFormat = inputNode.outputFormat(forBus: 0)
         let targetFormat = AVAudioFormat(
             commonFormat: .pcmFormatInt16,
@@ -72,6 +82,29 @@ public final class AudioCapture {
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         isRunning = false
+    }
+}
+
+private enum AudioCaptureError: Error {
+    case missingAudioUnit
+    case audioUnit(OSStatus)
+}
+
+private func setInputDevice(_ deviceID: AudioDeviceID, on inputNode: AVAudioInputNode) throws {
+    guard let audioUnit = inputNode.audioUnit else {
+        throw AudioCaptureError.missingAudioUnit
+    }
+    var deviceID = deviceID
+    let status = AudioUnitSetProperty(
+        audioUnit,
+        kAudioOutputUnitProperty_CurrentDevice,
+        kAudioUnitScope_Global,
+        0,
+        &deviceID,
+        UInt32(MemoryLayout<AudioDeviceID>.size)
+    )
+    guard status == noErr else {
+        throw AudioCaptureError.audioUnit(status)
     }
 }
 

@@ -1,5 +1,6 @@
 import Observation
 import SwiftUI
+import CoreAudio
 
 public struct ContentView: View {
     private let configuration: FloxBoxDistributionConfiguration
@@ -33,6 +34,15 @@ public struct ContentView: View {
                     }
                 }
                 .frame(minWidth: 180)
+
+                Picker("Mic", selection: $viewModel.selectedInputDeviceID) {
+                    Text("System Default").tag(AudioDeviceID?.none)
+                    ForEach(viewModel.availableInputDevices) { device in
+                        Text(device.name).tag(Optional(device.id))
+                    }
+                }
+                .frame(minWidth: 220)
+                .disabled(viewModel.isRecording)
 
                 Picker("VAD Mode", selection: $viewModel.vadMode) {
                     ForEach(VADMode.allCases) { mode in
@@ -100,6 +110,9 @@ public struct ContentView: View {
         }
         .padding(16)
         .frame(minWidth: 900, minHeight: 600)
+        .onAppear {
+            viewModel.refreshInputDevices()
+        }
     }
 
     private func statusColor(for status: RecordingStatus) -> Color {
