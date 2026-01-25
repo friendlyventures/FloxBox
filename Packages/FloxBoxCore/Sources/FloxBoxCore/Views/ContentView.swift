@@ -27,6 +27,13 @@ public struct ContentView: View {
                 }
                 .frame(minWidth: 240)
 
+                Picker("Language", selection: $viewModel.language) {
+                    ForEach(TranscriptionLanguage.allCases) { language in
+                        Text(language.displayName).tag(language)
+                    }
+                }
+                .frame(minWidth: 180)
+
                 Picker("VAD Mode", selection: $viewModel.vadMode) {
                     ForEach(VADMode.allCases) { mode in
                         Text(mode.displayName).tag(mode)

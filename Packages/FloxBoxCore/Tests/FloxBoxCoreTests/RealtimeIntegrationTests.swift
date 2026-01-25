@@ -27,6 +27,7 @@ final class RealtimeIntegrationTests: XCTestCase {
 
         let configuration = TranscriptionSessionConfiguration(
             model: .defaultModel,
+            language: .defaultLanguage,
             vadMode: .off,
             serverVAD: .init(),
             semanticVAD: .init()

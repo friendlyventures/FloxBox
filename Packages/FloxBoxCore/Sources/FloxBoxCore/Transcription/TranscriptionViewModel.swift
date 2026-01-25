@@ -45,6 +45,7 @@ public enum APIKeyStatus: Equatable {
 @Observable
 public final class TranscriptionViewModel {
     public var model: TranscriptionModel = .defaultModel
+    public var language: TranscriptionLanguage = .defaultLanguage
     public var vadMode: VADMode = .server
     public var manualCommitInterval: ManualCommitInterval = .defaultInterval
     public var serverVAD: ServerVADTuning = .init()
@@ -136,6 +137,7 @@ public final class TranscriptionViewModel {
 
         let config = TranscriptionSessionConfiguration(
             model: model,
+            language: language,
             vadMode: vadMode,
             serverVAD: serverVAD,
             semanticVAD: semanticVAD

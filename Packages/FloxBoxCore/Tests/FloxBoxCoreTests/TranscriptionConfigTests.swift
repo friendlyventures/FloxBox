@@ -19,6 +19,10 @@ final class TranscriptionConfigTests: XCTestCase {
         XCTAssertEqual(TranscriptionModel.defaultModel, .gpt4oTranscribe)
     }
 
+    func testDefaultLanguage() {
+        XCTAssertEqual(TranscriptionLanguage.defaultLanguage, .english)
+    }
+
     func testManualCommitIntervalOptions() {
         XCTAssertEqual(
             ManualCommitInterval.options,

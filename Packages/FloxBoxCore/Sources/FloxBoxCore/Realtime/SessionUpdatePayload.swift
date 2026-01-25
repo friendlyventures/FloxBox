@@ -2,17 +2,20 @@ import Foundation
 
 public struct TranscriptionSessionConfiguration: Equatable {
     public var model: TranscriptionModel
+    public var language: TranscriptionLanguage
     public var vadMode: VADMode
     public var serverVAD: ServerVADTuning
     public var semanticVAD: SemanticVADTuning
 
     public init(
         model: TranscriptionModel,
+        language: TranscriptionLanguage,
         vadMode: VADMode,
         serverVAD: ServerVADTuning,
         semanticVAD: SemanticVADTuning
     ) {
         self.model = model
+        self.language = language
         self.vadMode = vadMode
         self.serverVAD = serverVAD
         self.semanticVAD = semanticVAD
@@ -37,7 +40,10 @@ public struct RealtimeTranscriptionSessionUpdate: Encodable, Equatable {
     public init(configuration: TranscriptionSessionConfiguration) {
         self.session = Session(
             inputAudioFormat: "pcm16",
-            inputAudioTranscription: Transcription(model: configuration.model.rawValue),
+            inputAudioTranscription: Transcription(
+                model: configuration.model.rawValue,
+                language: configuration.language.code
+            ),
             turnDetection: configuration.turnDetectionSetting,
             include: ["item.input_audio_transcription.logprobs"]
         )
@@ -45,6 +51,7 @@ public struct RealtimeTranscriptionSessionUpdate: Encodable, Equatable {
 
     public struct Transcription: Encodable, Equatable {
         public let model: String
+        public let language: String
     }
 
     public struct Session: Encodable, Equatable {

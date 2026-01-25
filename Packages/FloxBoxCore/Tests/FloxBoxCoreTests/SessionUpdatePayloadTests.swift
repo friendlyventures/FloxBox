@@ -5,6 +5,7 @@ final class SessionUpdatePayloadTests: XCTestCase {
     func testTurnDetectionDisabledEncodesNull() throws {
         let config = TranscriptionSessionConfiguration(
             model: .gpt4oTranscribe,
+            language: .english,
             vadMode: .off,
             serverVAD: .init(),
             semanticVAD: .init()
@@ -19,6 +20,7 @@ final class SessionUpdatePayloadTests: XCTestCase {
     func testServerVADEncodesOverrides() throws {
         let config = TranscriptionSessionConfiguration(
             model: .gpt4oTranscribe,
+            language: .english,
             vadMode: .server,
             serverVAD: .init(threshold: 0.2, prefixPaddingMs: 150, silenceDurationMs: 900, idleTimeoutMs: 5000),
             semanticVAD: .init()
@@ -33,5 +35,21 @@ final class SessionUpdatePayloadTests: XCTestCase {
         XCTAssertEqual(turnDetection?["prefix_padding_ms"] as? Int, 150)
         XCTAssertEqual(turnDetection?["silence_duration_ms"] as? Int, 900)
         XCTAssertEqual(turnDetection?["idle_timeout_ms"] as? Int, 5000)
+    }
+
+    func testLanguageEncodesISOCode() throws {
+        let config = TranscriptionSessionConfiguration(
+            model: .gpt4oTranscribe,
+            language: .german,
+            vadMode: .off,
+            serverVAD: .init(),
+            semanticVAD: .init()
+        )
+        let update = RealtimeTranscriptionSessionUpdate(configuration: config)
+        let data = try JSONEncoder().encode(update)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let session = json?["session"] as? [String: Any]
+        let transcription = session?["input_audio_transcription"] as? [String: Any]
+        XCTAssertEqual(transcription?["language"] as? String, "de")
     }
 }
