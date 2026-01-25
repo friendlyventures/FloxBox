@@ -1,8 +1,18 @@
 import CoreGraphics
 import Foundation
 
+protocol RetryTimer {
+    func invalidate()
+}
+
+extension Timer: RetryTimer {}
+
 @MainActor
 public final class EventTapShortcutBackend: ShortcutBackend {
+    typealias TapFactory = (CGEventMask, @escaping CGEventTapCallBack, UnsafeMutableRawPointer?) -> CFMachPort?
+    typealias RunLoopSourceFactory = (CFMachPort) -> CFRunLoopSource
+    typealias RetryTimerFactory = (TimeInterval, @escaping () -> Void) -> RetryTimer
+
     public var onTrigger: ((ShortcutTrigger) -> Void)?
     public var onStatusChange: ((String?) -> Void)?
 
@@ -10,7 +20,11 @@ public final class EventTapShortcutBackend: ShortcutBackend {
     private var shortcuts: [ShortcutDefinition] = []
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-    private var runLoop: CFRunLoop?
+    private let runLoop: CFRunLoop?
+    private let tapFactory: TapFactory
+    private let runLoopSourceFactory: RunLoopSourceFactory
+    private let retryTimerFactory: RetryTimerFactory
+    private var retryTimer: RetryTimer?
 
     private var captureCompletion: ((ShortcutDefinition?) -> Void)?
     private var captureId: ShortcutID?
@@ -18,9 +32,32 @@ public final class EventTapShortcutBackend: ShortcutBackend {
     private var captureName: String?
     private var captureCandidate: ShortcutDefinition?
 
-    public init() {}
+    public convenience init() {
+        self.init(
+            tapFactory: EventTapShortcutBackend.defaultTapFactory,
+            runLoop: CFRunLoopGetMain(),
+            runLoopSourceFactory: EventTapShortcutBackend.defaultRunLoopSourceFactory,
+            retryTimerFactory: EventTapShortcutBackend.defaultRetryTimerFactory,
+        )
+    }
+
+    init(
+        tapFactory: @escaping TapFactory,
+        runLoop: CFRunLoop?,
+        runLoopSourceFactory: @escaping RunLoopSourceFactory,
+        retryTimerFactory: @escaping RetryTimerFactory,
+    ) {
+        self.tapFactory = tapFactory
+        self.runLoop = runLoop
+        self.runLoopSourceFactory = runLoopSourceFactory
+        self.retryTimerFactory = retryTimerFactory
+    }
 
     public func start() {
+        attemptStart()
+    }
+
+    private func attemptStart() {
         guard eventTap == nil else { return }
         let mask = (1 << CGEventType.keyDown.rawValue)
             | (1 << CGEventType.keyUp.rawValue)
@@ -32,31 +69,25 @@ public final class EventTapShortcutBackend: ShortcutBackend {
             return backend.handleEvent(proxy: proxy, type: type, event: event)
         }
 
-        let eventTap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
-            eventsOfInterest: CGEventMask(mask),
-            callback: callback,
-            userInfo: Unmanaged.passUnretained(self).toOpaque(),
-        )
-
-        guard let eventTap else {
-            DispatchQueue.main.async { [weak self] in
-                self?.onStatusChange?("Enable Input Monitoring for FloxBox in System Settings")
-            }
+        guard let eventTap = tapFactory(
+            CGEventMask(mask),
+            callback,
+            Unmanaged.passUnretained(self).toOpaque(),
+        ) else {
+            onStatusChange?("Enable Input Monitoring for FloxBox in System Settings")
+            scheduleRetry()
             return
         }
 
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0)
+        let source = runLoopSourceFactory(eventTap)
         self.eventTap = eventTap
         runLoopSource = source
-        runLoop = CFRunLoopGetMain()
-
         if let runLoop {
             CFRunLoopAddSource(runLoop, source, .commonModes)
         }
         CGEvent.tapEnable(tap: eventTap, enable: true)
+        clearRetryTimer()
+        onStatusChange?(nil)
     }
 
     public func stop() {
@@ -65,7 +96,7 @@ public final class EventTapShortcutBackend: ShortcutBackend {
         CFMachPortInvalidate(eventTap)
         self.runLoopSource = nil
         self.eventTap = nil
-        self.runLoop = nil
+        clearRetryTimer()
     }
 
     public func register(_ shortcuts: [ShortcutDefinition]) {
@@ -143,6 +174,45 @@ public final class EventTapShortcutBackend: ShortcutBackend {
         switch id {
         case .pushToTalk:
             "Push To Talk"
+        }
+    }
+
+    private func scheduleRetry() {
+        guard retryTimer == nil else { return }
+        retryTimer = retryTimerFactory(1.0) { [weak self] in
+            self?.attemptStart()
+        }
+    }
+
+    private func clearRetryTimer() {
+        retryTimer?.invalidate()
+        retryTimer = nil
+    }
+}
+
+private extension EventTapShortcutBackend {
+    static func defaultTapFactory(
+        mask: CGEventMask,
+        callback: @escaping CGEventTapCallBack,
+        userInfo: UnsafeMutableRawPointer?,
+    ) -> CFMachPort? {
+        CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: mask,
+            callback: callback,
+            userInfo: userInfo,
+        )
+    }
+
+    static func defaultRunLoopSourceFactory(_ eventTap: CFMachPort) -> CFRunLoopSource {
+        CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0)
+    }
+
+    static func defaultRetryTimerFactory(_ interval: TimeInterval, handler: @escaping () -> Void) -> RetryTimer {
+        Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
+            handler()
         }
     }
 }
