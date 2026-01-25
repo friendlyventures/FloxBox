@@ -119,7 +119,13 @@ jobs:
       - name: Ensure gtar
         run: |
           if ! command -v gtar >/dev/null 2>&1; then
-            brew install gnu-tar
+            mkdir -p "$RUNNER_TEMP/gtar"
+            cat > "$RUNNER_TEMP/gtar/gtar" <<'SH'
+#!/usr/bin/env bash
+exec /usr/bin/tar "$@"
+SH
+            chmod +x "$RUNNER_TEMP/gtar/gtar"
+            echo "$RUNNER_TEMP/gtar" >> "$GITHUB_PATH"
           fi
 
       - name: Upload Pages artifact
