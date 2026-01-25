@@ -64,6 +64,7 @@ public final class TranscriptionViewModel {
     private let audioCapture = AudioCapture()
     private let transcriptStore = TranscriptStore()
     private let keychain: any KeychainStoring
+    private let notchOverlay = NotchRecordingController()
     private var client: RealtimeWebSocketClient?
     private var commitTask: Task<Void, Never>?
     private var receiveTask: Task<Void, Never>?
@@ -129,6 +130,7 @@ public final class TranscriptionViewModel {
         guard !apiKey.isEmpty else {
             status = .error("Missing API key")
             errorMessage = "Missing API key"
+            notchOverlay.hide()
             return
         }
 
@@ -136,6 +138,7 @@ public final class TranscriptionViewModel {
         guard permitted else {
             status = .error("Microphone permission denied")
             errorMessage = "Microphone permission denied"
+            notchOverlay.hide()
             return
         }
 
@@ -157,6 +160,7 @@ public final class TranscriptionViewModel {
         } catch {
             status = .error("Failed to configure session")
             errorMessage = error.localizedDescription
+            notchOverlay.hide()
             return
         }
 
@@ -178,16 +182,19 @@ public final class TranscriptionViewModel {
         } catch {
             status = .error("Failed to start audio")
             errorMessage = error.localizedDescription
+            notchOverlay.hide()
             return
         }
 
         startCommitTimerIfNeeded()
         status = .recording
+        notchOverlay.show()
     }
 
     private func stopInternal() async {
         guard status == .recording || status == .connecting else { return }
 
+        notchOverlay.hide()
         commitTask?.cancel()
         commitTask = nil
         audioCapture.stop()
@@ -224,6 +231,7 @@ public final class TranscriptionViewModel {
         case let .error(message):
             status = .error(message)
             errorMessage = message
+            notchOverlay.hide()
         case .unknown:
             break
         }
