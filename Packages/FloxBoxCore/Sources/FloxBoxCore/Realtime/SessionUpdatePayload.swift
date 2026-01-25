@@ -31,50 +31,34 @@ public struct TranscriptionSessionConfiguration: Equatable {
 }
 
 public struct RealtimeTranscriptionSessionUpdate: Encodable, Equatable {
-    public let type: String = "session.update"
+    public let type: String = "transcription_session.update"
     public let session: Session
 
     public init(configuration: TranscriptionSessionConfiguration) {
         self.session = Session(
-            audio: Audio(
-                input: Input(
-                    format: Format(type: "audio/pcm", rate: 24_000),
-                    transcription: Transcription(model: configuration.model.rawValue),
-                    turnDetection: configuration.turnDetectionSetting
-                )
-            ),
+            inputAudioFormat: "pcm16",
+            inputAudioTranscription: Transcription(model: configuration.model.rawValue),
+            turnDetection: configuration.turnDetectionSetting,
             include: ["item.input_audio_transcription.logprobs"]
         )
     }
 
-    public struct Session: Encodable, Equatable {
-        public let audio: Audio
-        public let include: [String]?
-    }
-
-    public struct Audio: Encodable, Equatable {
-        public let input: Input
-    }
-
-    public struct Input: Encodable, Equatable {
-        public let format: Format
-        public let transcription: Transcription
-        public let turnDetection: TurnDetectionSetting
-
-        enum CodingKeys: String, CodingKey {
-            case format
-            case transcription
-            case turnDetection = "turn_detection"
-        }
-    }
-
-    public struct Format: Encodable, Equatable {
-        public let type: String
-        public let rate: Int
-    }
-
     public struct Transcription: Encodable, Equatable {
         public let model: String
+    }
+
+    public struct Session: Encodable, Equatable {
+        public let inputAudioFormat: String
+        public let inputAudioTranscription: Transcription
+        public let turnDetection: TurnDetectionSetting
+        public let include: [String]?
+
+        enum CodingKeys: String, CodingKey {
+            case inputAudioFormat = "input_audio_format"
+            case inputAudioTranscription = "input_audio_transcription"
+            case turnDetection = "turn_detection"
+            case include
+        }
     }
 }
 

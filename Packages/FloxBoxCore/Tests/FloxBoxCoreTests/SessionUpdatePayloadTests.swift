@@ -12,7 +12,7 @@ final class SessionUpdatePayloadTests: XCTestCase {
         let update = RealtimeTranscriptionSessionUpdate(configuration: config)
         let data = try JSONEncoder().encode(update)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        let turnDetection = (((json?["session"] as? [String: Any])?["audio"] as? [String: Any])?["input"] as? [String: Any])?["turn_detection"]
+        let turnDetection = (json?["session"] as? [String: Any])?["turn_detection"]
         XCTAssertTrue(turnDetection is NSNull)
     }
 
@@ -26,8 +26,8 @@ final class SessionUpdatePayloadTests: XCTestCase {
         let update = RealtimeTranscriptionSessionUpdate(configuration: config)
         let data = try JSONEncoder().encode(update)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        let input = ((json?["session"] as? [String: Any])?["audio"] as? [String: Any])?["input"] as? [String: Any]
-        let turnDetection = input?["turn_detection"] as? [String: Any]
+        let session = json?["session"] as? [String: Any]
+        let turnDetection = session?["turn_detection"] as? [String: Any]
         XCTAssertEqual(turnDetection?["type"] as? String, "server_vad")
         XCTAssertEqual(turnDetection?["threshold"] as? Double, 0.2)
         XCTAssertEqual(turnDetection?["prefix_padding_ms"] as? Int, 150)

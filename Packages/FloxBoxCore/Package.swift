@@ -25,7 +25,8 @@ let package = Package(
         .testTarget(
             name: "FloxBoxCoreTests",
             dependencies: ["FloxBoxCore"],
-            path: "Tests/FloxBoxCoreTests"
+            path: "Tests/FloxBoxCoreTests",
+            resources: [.process("Fixtures")]
         ),
         .testTarget(
             name: "FloxBoxCoreDirectTests",

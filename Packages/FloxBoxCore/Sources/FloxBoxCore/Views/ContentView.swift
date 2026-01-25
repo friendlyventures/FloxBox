@@ -75,6 +75,14 @@ public struct ContentView: View {
                     .foregroundStyle(statusColor(for: viewModel.status))
             }
 
+#if DEBUG
+            if let error = viewModel.errorMessage {
+                Text("Debug Error: \(error)")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+#endif
+
             TextEditor(text: $viewModel.transcript)
                 .font(.body)
                 .frame(minHeight: 320)

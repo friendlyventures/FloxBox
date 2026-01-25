@@ -1,7 +1,7 @@
 import Foundation
 
 public enum RealtimeAPI {
-    public static let baseURL = URL(string: "wss://api.openai.com/v1/realtime?model=gpt-realtime")!
+    public static let baseURL = URL(string: "wss://api.openai.com/v1/realtime?intent=transcription")!
 }
 
 public struct InputAudioBufferAppendEvent: Encodable {
@@ -38,6 +38,9 @@ public final class RealtimeWebSocketClient {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("realtime=v1", forHTTPHeaderField: "OpenAI-Beta")
 
+#if DEBUG
+        debugLog("Connecting to \(RealtimeAPI.baseURL.absoluteString)")
+#endif
         let socket = urlSession.webSocketTask(with: request)
         self.socket = socket
         socket.resume()
@@ -64,7 +67,20 @@ public final class RealtimeWebSocketClient {
     private func send<Event: Encodable>(_ event: Event) async throws {
         guard let socket else { return }
         let payload = try JSONEncoder().encode(event)
-        try await socket.send(.data(payload))
+        guard let text = String(data: payload, encoding: .utf8) else {
+#if DEBUG
+            debugLog("Failed to encode payload as UTF-8 string")
+#endif
+            return
+        }
+        do {
+            try await socket.send(.string(text))
+        } catch {
+#if DEBUG
+            debugLog("Send failed: \(error)")
+#endif
+            throw error
+        }
     }
 
     private func receiveLoop() {
@@ -85,12 +101,26 @@ public final class RealtimeWebSocketClient {
 
                     if let event = try? RealtimeEventDecoder.decode(data) {
                         self?.continuation.yield(event)
+                    } else {
+#if DEBUG
+                        let preview = String(data: data, encoding: .utf8) ?? "<non-utf8 payload>"
+                        self?.debugLog("Unknown event payload: \(preview)")
+#endif
                     }
                 } catch {
+#if DEBUG
+                    self?.debugLog("Receive failed: \(error)")
+#endif
                     self?.continuation.yield(.error(error.localizedDescription))
                     break
                 }
             }
         }
     }
+
+#if DEBUG
+    private func debugLog(_ message: String) {
+        print("[Realtime] \(message)")
+    }
+#endif
 }

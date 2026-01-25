@@ -35,6 +35,18 @@ run = [
   "mise lint"
 ]
 
+[tasks.test-realtime]
+description = "Run realtime integration test (requires OPENAI_API_KEY)"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${OPENAI_API_KEY:?Set OPENAI_API_KEY to run the realtime integration test}"
+export FLOXBOX_RUN_INTEGRATION_TESTS=1
+
+swift test --package-path Packages/FloxBoxCore --filter RealtimeIntegrationTests
+'''
+
 [tasks.install-githooks]
 description = "Install git hooks via pre-commit"
 run = '''
