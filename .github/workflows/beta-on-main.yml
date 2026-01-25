@@ -96,25 +96,25 @@ jobs:
           BETA_APPCAST_URL="$PAGES_BASE_URL/beta/appcast.xml"
           BETA_ZIP_URL="$PAGES_BASE_URL/beta/floxbox-macos-universal.zip"
 
-          cat > _site/beta/appcast.xml <<APPCAST
-<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
-  <channel>
-    <title>FloxBox Beta Updates</title>
-    <link>${BETA_APPCAST_URL}</link>
-    <description>FloxBox beta updates</description>
-    <language>en</language>
-    <item>
-      <title>FloxBox Beta ${FLOXBOX_COMMIT}</title>
-      <pubDate>${DATE}</pubDate>
-      <sparkle:version>${FLOXBOX_BUILD}</sparkle:version>
-      <sparkle:shortVersionString>${FLOXBOX_COMMIT}</sparkle:shortVersionString>
-      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
-      <enclosure url="${BETA_ZIP_URL}" ${SPARKLE_SIGNATURE} type="application/octet-stream"/>
-    </item>
-  </channel>
-</rss>
-APPCAST
+          {
+            printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>'
+            printf '%s\n' '<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">'
+            printf '%s\n' '  <channel>'
+            printf '%s\n' '    <title>FloxBox Beta Updates</title>'
+            printf '%s\n' "    <link>${BETA_APPCAST_URL}</link>"
+            printf '%s\n' '    <description>FloxBox beta updates</description>'
+            printf '%s\n' '    <language>en</language>'
+            printf '%s\n' '    <item>'
+            printf '%s\n' "      <title>FloxBox Beta ${FLOXBOX_COMMIT}</title>"
+            printf '%s\n' "      <pubDate>${DATE}</pubDate>"
+            printf '%s\n' "      <sparkle:version>${FLOXBOX_BUILD}</sparkle:version>"
+            printf '%s\n' "      <sparkle:shortVersionString>${FLOXBOX_COMMIT}</sparkle:shortVersionString>"
+            printf '%s\n' '      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>'
+            printf '%s\n' "      <enclosure url=\"${BETA_ZIP_URL}\" ${SPARKLE_SIGNATURE} type=\"application/octet-stream\"/>"
+            printf '%s\n' '    </item>'
+            printf '%s\n' '  </channel>'
+            printf '%s\n' '</rss>'
+          } > _site/beta/appcast.xml
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
