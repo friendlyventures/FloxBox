@@ -8,7 +8,10 @@ public final class AudioCapture {
     private let engine = AVAudioEngine()
     private var converter: AVAudioConverter?
     private var preferredInputDeviceID: AudioDeviceID?
+    private var pendingData = Data()
+    private var pendingHandler: Handler?
     private var isRunning = false
+    private let chunkSamples: Int = 3_072
 
     public init() {}
 
@@ -36,6 +39,8 @@ public final class AudioCapture {
 
     public func start(handler: @escaping Handler) throws {
         guard !isRunning else { return }
+        pendingHandler = handler
+        pendingData.removeAll(keepingCapacity: true)
 
         let inputNode = engine.inputNode
         if let deviceID = preferredInputDeviceID {
@@ -46,7 +51,7 @@ public final class AudioCapture {
             commonFormat: .pcmFormatInt16,
             sampleRate: 24_000,
             channels: 1,
-            interleaved: true
+            interleaved: false
         )!
 
         converter = AVAudioConverter(from: inputFormat, to: targetFormat)
@@ -54,9 +59,11 @@ public final class AudioCapture {
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] buffer, _ in
             guard let self, let converter = self.converter else { return }
 
+            let ratio = targetFormat.sampleRate / inputFormat.sampleRate
+            let estimatedFrames = Int(ceil(Double(buffer.frameLength) * ratio))
             let convertedBuffer = AVAudioPCMBuffer(
                 pcmFormat: targetFormat,
-                frameCapacity: AVAudioFrameCount(1024)
+                frameCapacity: AVAudioFrameCount(max(1, estimatedFrames))
             )
             guard let convertedBuffer else { return }
 
@@ -68,8 +75,9 @@ public final class AudioCapture {
 
             converter.convert(to: convertedBuffer, error: &error, withInputFrom: inputBlock)
             guard error == nil else { return }
+            guard convertedBuffer.frameLength > 0 else { return }
 
-            handler(convertedBuffer.pcm16Data())
+            self.appendPCMData(convertedBuffer.pcm16Data())
         }
 
         engine.prepare()
@@ -79,9 +87,28 @@ public final class AudioCapture {
 
     public func stop() {
         guard isRunning else { return }
+        flushPending()
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
         isRunning = false
+        pendingHandler = nil
+    }
+
+    private func appendPCMData(_ data: Data) {
+        guard !data.isEmpty, let handler = pendingHandler else { return }
+        pendingData.append(data)
+        let chunkBytes = chunkSamples * MemoryLayout<Int16>.size
+        while pendingData.count >= chunkBytes {
+            let chunk = pendingData.prefix(chunkBytes)
+            pendingData.removeSubrange(0..<chunkBytes)
+            handler(Data(chunk))
+        }
+    }
+
+    private func flushPending() {
+        guard let handler = pendingHandler, !pendingData.isEmpty else { return }
+        handler(pendingData)
+        pendingData.removeAll(keepingCapacity: true)
     }
 }
 
@@ -110,8 +137,11 @@ private func setInputDevice(_ deviceID: AudioDeviceID, on inputNode: AVAudioInpu
 
 private extension AVAudioPCMBuffer {
     func pcm16Data() -> Data {
-        guard let channel = int16ChannelData else { return Data() }
-        let frames = Int(frameLength)
-        return Data(bytes: channel[0], count: frames * MemoryLayout<Int16>.size)
+        let bufferList = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: audioBufferList))
+        guard let first = bufferList.first, let data = first.mData else { return Data() }
+        let bytesPerFrame = Int(format.streamDescription.pointee.mBytesPerFrame)
+        let expectedSize = Int(frameLength) * bytesPerFrame
+        let byteCount = min(Int(first.mDataByteSize), expectedSize)
+        return Data(bytes: data, count: byteCount)
     }
 }

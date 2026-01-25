@@ -3,6 +3,7 @@ import Foundation
 public struct TranscriptionSessionConfiguration: Equatable {
     public var model: TranscriptionModel
     public var language: TranscriptionLanguage
+    public var noiseReduction: InputAudioNoiseReduction?
     public var vadMode: VADMode
     public var serverVAD: ServerVADTuning
     public var semanticVAD: SemanticVADTuning
@@ -10,12 +11,14 @@ public struct TranscriptionSessionConfiguration: Equatable {
     public init(
         model: TranscriptionModel,
         language: TranscriptionLanguage,
+        noiseReduction: InputAudioNoiseReduction? = .farField,
         vadMode: VADMode,
         serverVAD: ServerVADTuning,
         semanticVAD: SemanticVADTuning
     ) {
         self.model = model
         self.language = language
+        self.noiseReduction = noiseReduction
         self.vadMode = vadMode
         self.serverVAD = serverVAD
         self.semanticVAD = semanticVAD
@@ -44,6 +47,7 @@ public struct RealtimeTranscriptionSessionUpdate: Encodable, Equatable {
                 model: configuration.model.rawValue,
                 language: configuration.language.code
             ),
+            inputAudioNoiseReduction: configuration.noiseReduction,
             turnDetection: configuration.turnDetectionSetting,
             include: ["item.input_audio_transcription.logprobs"]
         )
@@ -57,16 +61,30 @@ public struct RealtimeTranscriptionSessionUpdate: Encodable, Equatable {
     public struct Session: Encodable, Equatable {
         public let inputAudioFormat: String
         public let inputAudioTranscription: Transcription
+        public let inputAudioNoiseReduction: InputAudioNoiseReduction?
         public let turnDetection: TurnDetectionSetting
         public let include: [String]?
 
         enum CodingKeys: String, CodingKey {
             case inputAudioFormat = "input_audio_format"
             case inputAudioTranscription = "input_audio_transcription"
+            case inputAudioNoiseReduction = "input_audio_noise_reduction"
             case turnDetection = "turn_detection"
             case include
         }
     }
+}
+
+public enum InputAudioNoiseReductionType: String, Encodable, Equatable {
+    case nearField = "near_field"
+    case farField = "far_field"
+}
+
+public struct InputAudioNoiseReduction: Encodable, Equatable {
+    public let type: InputAudioNoiseReductionType
+
+    public static let nearField = InputAudioNoiseReduction(type: .nearField)
+    public static let farField = InputAudioNoiseReduction(type: .farField)
 }
 
 public enum TurnDetectionSetting: Encodable, Equatable {

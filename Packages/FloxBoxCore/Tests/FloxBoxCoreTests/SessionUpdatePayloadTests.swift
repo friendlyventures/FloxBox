@@ -52,4 +52,21 @@ final class SessionUpdatePayloadTests: XCTestCase {
         let transcription = session?["input_audio_transcription"] as? [String: Any]
         XCTAssertEqual(transcription?["language"] as? String, "de")
     }
+
+    func testNoiseReductionEncodesType() throws {
+        let config = TranscriptionSessionConfiguration(
+            model: .gpt4oTranscribe,
+            language: .english,
+            noiseReduction: .nearField,
+            vadMode: .off,
+            serverVAD: .init(),
+            semanticVAD: .init()
+        )
+        let update = RealtimeTranscriptionSessionUpdate(configuration: config)
+        let data = try JSONEncoder().encode(update)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let session = json?["session"] as? [String: Any]
+        let reduction = session?["input_audio_noise_reduction"] as? [String: Any]
+        XCTAssertEqual(reduction?["type"] as? String, "near_field")
+    }
 }
