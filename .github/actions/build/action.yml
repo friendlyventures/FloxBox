@@ -1,0 +1,159 @@
+name: "Build FloxBox"
+description: "Builds and packages FloxBox for macOS"
+
+inputs:
+  version:
+    required: true
+    description: "Version to use (commit hash for beta, version number for releases)"
+  build_number:
+    required: true
+    description: "Build number to use"
+  short_commit_hash:
+    required: true
+    description: "Short commit hash to use"
+  feed_url:
+    required: true
+    description: "Sparkle feed URL to embed in Info.plist"
+  BUILD_CERTIFICATE_BASE64:
+    required: true
+    description: "Base64-encoded build certificate"
+  INSTALLER_CERTIFICATE_BASE64:
+    required: true
+    description: "Base64-encoded installer certificate"
+  P12_PASSWORD:
+    required: true
+    description: "P12 certificate password"
+  KEYCHAIN_PASSWORD:
+    required: true
+    description: "Keychain password"
+  CERTIFICATE_NAME:
+    required: true
+    description: "Certificate name"
+  INSTALLER_CERTIFICATE_NAME:
+    required: true
+    description: "Installer certificate name"
+  NOTARIZATION_APPLE_ID:
+    required: true
+    description: "Apple ID for notarization"
+  NOTARIZATION_TEAM_ID:
+    required: true
+    description: "Team ID for notarization"
+  NOTARIZATION_PASS:
+    required: true
+    description: "Password for notarization"
+  SPARKLE_KEY_PUB:
+    required: true
+    description: "Sparkle public key"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup keychain
+      shell: bash
+      env:
+        BUILD_CERTIFICATE_BASE64: ${{ inputs.BUILD_CERTIFICATE_BASE64 }}
+        INSTALLER_CERTIFICATE_BASE64: ${{ inputs.INSTALLER_CERTIFICATE_BASE64 }}
+        P12_PASSWORD: ${{ inputs.P12_PASSWORD }}
+        KEYCHAIN_PASSWORD: ${{ inputs.KEYCHAIN_PASSWORD }}
+        NOTARIZATION_APPLE_ID: ${{ inputs.NOTARIZATION_APPLE_ID }}
+        NOTARIZATION_TEAM_ID: ${{ inputs.NOTARIZATION_TEAM_ID }}
+        NOTARIZATION_PASS: ${{ inputs.NOTARIZATION_PASS }}
+      run: |
+        set -euo pipefail
+
+        CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+        INSTALLER_CERTIFICATE_PATH=$RUNNER_TEMP/installer_certificate.p12
+        KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+        echo "CERTIFICATE_PATH=$CERTIFICATE_PATH" >> $GITHUB_ENV
+        echo "INSTALLER_CERTIFICATE_PATH=$INSTALLER_CERTIFICATE_PATH" >> $GITHUB_ENV
+        echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> $GITHUB_ENV
+
+        echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o "$CERTIFICATE_PATH"
+        echo -n "$INSTALLER_CERTIFICATE_BASE64" | base64 --decode -o "$INSTALLER_CERTIFICATE_PATH"
+
+        security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+        security import "$CERTIFICATE_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+        security import "$INSTALLER_CERTIFICATE_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+        security list-keychain -d user -s "$KEYCHAIN_PATH"
+        security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+        xcrun notarytool store-credentials "notarytool-profile" \
+          --apple-id "$NOTARIZATION_APPLE_ID" \
+          --team-id "$NOTARIZATION_TEAM_ID" \
+          --password "$NOTARIZATION_PASS" \
+          --keychain "$KEYCHAIN_PATH"
+
+    - name: Build
+      shell: bash
+      env:
+        CERTIFICATE_NAME: ${{ inputs.CERTIFICATE_NAME }}
+        SPARKLE_KEY_PUB: ${{ inputs.SPARKLE_KEY_PUB }}
+        FLOXBOX_VERSION: ${{ inputs.version }}
+        FLOXBOX_FEED_URL: ${{ inputs.feed_url }}
+      run: |
+        set -euo pipefail
+
+        xcodebuild -scheme FloxBox -target FloxBox \
+          -configuration Release \
+          -derivedDataPath ./DerivedData \
+          -destination generic/platform=macOS \
+          CODE_SIGNING_ALLOWED=NO
+
+        app_path="DerivedData/Build/Products/Release/FloxBox.app"
+        plist="$app_path/Contents/Info.plist"
+
+        set_plist_value() {
+          local key="$1"
+          local type="$2"
+          local value="$3"
+          if /usr/libexec/PlistBuddy -c "Set :${key} ${value}" "$plist" 2>/dev/null; then
+            return 0
+          fi
+          /usr/libexec/PlistBuddy -c "Add :${key} ${type} ${value}" "$plist"
+        }
+
+        set_plist_value "CFBundleVersion" "string" "${{ inputs.build_number }}"
+        set_plist_value "CFBundleShortVersionString" "string" "$FLOXBOX_VERSION"
+        set_plist_value "FloxBoxCommit" "string" "${{ inputs.short_commit_hash }}"
+        set_plist_value "SUPublicEDKey" "string" "$SPARKLE_KEY_PUB"
+        set_plist_value "SUFeedURL" "string" "$FLOXBOX_FEED_URL"
+
+        sign_component() {
+          local rel_path="$1"
+          if [ -e "$app_path/$rel_path" ]; then
+            /usr/bin/codesign --verbose -f -s "$CERTIFICATE_NAME" -o runtime "$app_path/$rel_path"
+          fi
+        }
+
+        sign_component "Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc"
+        sign_component "Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc"
+        sign_component "Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate"
+        sign_component "Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app"
+        sign_component "Contents/Frameworks/Sparkle.framework"
+
+        /usr/bin/codesign --verbose -f -s "$CERTIFICATE_NAME" -o runtime \
+          --entitlements "FloxBox/FloxBox.entitlements" "$app_path"
+
+        echo "Notarizing app..."
+        ditto -c -k --keepParent "$app_path" "notarization.zip"
+        xcrun notarytool submit "notarization.zip" \
+          --keychain-profile "notarytool-profile" \
+          --keychain "$KEYCHAIN_PATH" \
+          --wait
+        xcrun stapler staple "$app_path"
+        rm -f "notarization.zip"
+
+        (cd DerivedData/Build/Products/Release && \
+          zip -9 -r --symlinks ../../../../floxbox-macos-universal.zip FloxBox.app)
+
+    - name: Cleanup
+      if: always()
+      shell: bash
+      run: |
+        security delete-keychain "$KEYCHAIN_PATH" || true
+        rm -f "$CERTIFICATE_PATH" || true
+        rm -f "$INSTALLER_CERTIFICATE_PATH" || true

@@ -1,0 +1,133 @@
+name: Beta on main
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build-beta:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Sparkle
+        env:
+          SPARKLE_VERSION: 2.8.1
+        run: |
+          mkdir -p .action/sparkle
+          cd .action/sparkle
+          curl -L "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-for-Swift-Package-Manager.zip" > sparkle.zip
+          unzip -q sparkle.zip
+          echo "$(pwd)/bin" >> $GITHUB_PATH
+
+      - name: Build number
+        run: |
+          echo "FLOXBOX_BUILD=$(git rev-list --count HEAD)" >> $GITHUB_ENV
+          echo "FLOXBOX_COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      - name: Build
+        uses: ./.github/actions/build
+        with:
+          version: ${{ env.FLOXBOX_COMMIT }}
+          build_number: ${{ env.FLOXBOX_BUILD }}
+          short_commit_hash: ${{ env.FLOXBOX_COMMIT }}
+          feed_url: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/beta/appcast.xml
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          INSTALLER_CERTIFICATE_BASE64: ${{ secrets.INSTALLER_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          CERTIFICATE_NAME: ${{ secrets.CERTIFICATE_NAME }}
+          INSTALLER_CERTIFICATE_NAME: ${{ secrets.INSTALLER_CERTIFICATE_NAME }}
+          NOTARIZATION_APPLE_ID: ${{ secrets.NOTARIZATION_APPLE_ID }}
+          NOTARIZATION_TEAM_ID: ${{ secrets.NOTARIZATION_TEAM_ID }}
+          NOTARIZATION_PASS: ${{ secrets.NOTARIZATION_PASS }}
+          SPARKLE_KEY_PUB: ${{ secrets.SPARKLE_KEY_PUB }}
+
+      - name: Sign update
+        env:
+          SPARKLE_KEY: ${{ secrets.SPARKLE_KEY }}
+        run: |
+          set -euo pipefail
+          echo "$SPARKLE_KEY" > signing.key
+          SIGNATURE=$(sign_update -f signing.key floxbox-macos-universal.zip)
+          rm -f signing.key
+          if [[ -z "$SIGNATURE" ]]; then
+            echo "Error: Failed to generate Sparkle signature" >&2
+            exit 1
+          fi
+          if [[ ! "$SIGNATURE" =~ sparkle:edSignature= ]]; then
+            echo "Error: Sparkle signature has invalid format: $SIGNATURE" >&2
+            exit 1
+          fi
+          echo "SPARKLE_SIGNATURE=$SIGNATURE" >> $GITHUB_ENV
+
+      - name: Generate beta appcast
+        run: |
+          set -euo pipefail
+          PAGES_BASE_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+
+          mkdir -p _site/beta
+
+          if curl -fsSL "$PAGES_BASE_URL/appcast.xml" -o _site/appcast.xml; then
+            echo "Preserved stable appcast."
+          else
+            echo "No stable appcast found (yet)."
+          fi
+
+          if curl -fsSL "$PAGES_BASE_URL/floxbox-macos-universal.zip" -o _site/floxbox-macos-universal.zip; then
+            echo "Preserved stable zip."
+          else
+            echo "No stable zip found (yet)."
+          fi
+
+          cp floxbox-macos-universal.zip _site/beta/
+
+          DATE=$(date -R)
+          BETA_APPCAST_URL="$PAGES_BASE_URL/beta/appcast.xml"
+          BETA_ZIP_URL="$PAGES_BASE_URL/beta/floxbox-macos-universal.zip"
+
+          cat > _site/beta/appcast.xml <<APPCAST
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>FloxBox Beta Updates</title>
+    <link>${BETA_APPCAST_URL}</link>
+    <description>FloxBox beta updates</description>
+    <language>en</language>
+    <item>
+      <title>FloxBox Beta ${FLOXBOX_COMMIT}</title>
+      <pubDate>${DATE}</pubDate>
+      <sparkle:version>${FLOXBOX_BUILD}</sparkle:version>
+      <sparkle:shortVersionString>${FLOXBOX_COMMIT}</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <enclosure url="${BETA_ZIP_URL}" ${SPARKLE_SIGNATURE} type="application/octet-stream"/>
+    </item>
+  </channel>
+</rss>
+APPCAST
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy-pages:
+    needs: build-beta
+    runs-on: self-hosted
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
