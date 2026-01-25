@@ -138,10 +138,7 @@ jobs:
         run: |
           if ! command -v gtar >/dev/null 2>&1; then
             mkdir -p "$RUNNER_TEMP/gtar"
-            cat > "$RUNNER_TEMP/gtar/gtar" <<'SH'
-#!/usr/bin/env bash
-exec /usr/bin/tar "$@"
-SH
+            printf '%s\n' '#!/usr/bin/env bash' 'exec /usr/bin/tar "$@"' > "$RUNNER_TEMP/gtar/gtar"
             chmod +x "$RUNNER_TEMP/gtar/gtar"
             echo "$RUNNER_TEMP/gtar" >> "$GITHUB_PATH"
           fi
