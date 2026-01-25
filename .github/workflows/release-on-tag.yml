@@ -134,6 +134,12 @@ jobs:
             printf '%s\n' '</rss>'
           } > _site/appcast.xml
 
+      - name: Ensure gtar
+        run: |
+          if ! command -v gtar >/dev/null 2>&1; then
+            brew install gnu-tar
+          fi
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
