@@ -5,7 +5,8 @@ import SwiftUI
 public struct ContentView: View {
     private let configuration: FloxBoxDistributionConfiguration
     @State private var viewModel = TranscriptionViewModel()
-    private let configColumns = [GridItem(.adaptive(minimum: 220), spacing: 12)]
+    @State private var updatesExpanded = false
+    @State private var serverVADExpanded = false
     private let tuningColumns = [GridItem(.adaptive(minimum: 200), spacing: 12)]
 
     public init(configuration: FloxBoxDistributionConfiguration) {
@@ -15,140 +16,217 @@ public struct ContentView: View {
     public var body: some View {
         @Bindable var viewModel = viewModel
 
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                GroupBox("API Key") {
-                    APIKeyRow(
-                        apiKey: $viewModel.apiKeyInput,
-                        status: $viewModel.apiKeyStatus,
-                        onSave: viewModel.saveAPIKey,
-                    )
+        VStack(spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("FloxBox")
+                        .font(.title2.weight(.semibold))
+                    Text(configuration.label)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
-                GroupBox("Controls") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 12) {
-                            Button(viewModel.isRecording ? "Stop" : "Start") {
-                                viewModel.isRecording ? viewModel.stop() : viewModel.start()
-                            }
-                            .buttonStyle(.borderedProminent)
+                Spacer()
 
-                            Button("Clear") {
-                                viewModel.clearTranscript()
-                            }
-
-                            Spacer()
-
-                            Text(viewModel.status.label)
-                                .foregroundStyle(statusColor(for: viewModel.status))
-                        }
-
-                        #if DEBUG
-                            if let error = viewModel.errorMessage {
-                                Text("Debug Error: \(error)")
-                                    .font(.caption)
-                                    .foregroundStyle(.red)
-                            }
-                        #endif
-                    }
-                }
-
-                GroupBox("Configuration") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        LazyVGrid(columns: configColumns, alignment: .leading, spacing: 12) {
-                            LabeledContent("Model") {
-                                Picker("Model", selection: $viewModel.model) {
-                                    ForEach(TranscriptionModel.allCases) { model in
-                                        Text(model.displayName).tag(model)
-                                    }
-                                }
-                                .labelsHidden()
-                            }
-
-                            LabeledContent("Language") {
-                                Picker("Language", selection: $viewModel.language) {
-                                    ForEach(TranscriptionLanguage.allCases) { language in
-                                        Text(language.displayName).tag(language)
-                                    }
-                                }
-                                .labelsHidden()
-                            }
-
-                            LabeledContent("Noise Reduction") {
-                                Picker("Noise Reduction", selection: $viewModel.noiseReduction) {
-                                    ForEach(NoiseReductionOption.allCases) { option in
-                                        Text(option.displayName).tag(option)
-                                    }
-                                }
-                                .labelsHidden()
-                            }
-
-                            LabeledContent("Mic") {
-                                Picker("Mic", selection: $viewModel.selectedInputDeviceID) {
-                                    Text("System Default").tag(AudioDeviceID?.none)
-                                    ForEach(viewModel.availableInputDevices) { device in
-                                        Text(device.name).tag(Optional(device.id))
-                                    }
-                                }
-                                .labelsHidden()
-                                .disabled(viewModel.isRecording)
-                            }
-                        }
-
-                        LabeledContent("VAD Mode") {
-                            Picker("VAD Mode", selection: $viewModel.vadMode) {
-                                ForEach(VADMode.allCases) { mode in
-                                    Text(mode.displayName).tag(mode)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                        }
-
-                        if viewModel.vadMode == .off {
-                            LabeledContent("Commit Interval") {
-                                Picker("Commit Interval", selection: $viewModel.manualCommitInterval) {
-                                    ForEach(ManualCommitInterval.options) { option in
-                                        Text(option.label).tag(option)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if let updatesView = configuration.updatesView {
-                    GroupBox("Updates") {
-                        updatesView
-                    }
-                }
-
-                if viewModel.vadMode == .server {
-                    GroupBox("Server VAD Tuning") {
-                        LazyVGrid(columns: tuningColumns, alignment: .leading, spacing: 12) {
-                            OptionalDoubleField(title: "Threshold", value: $viewModel.serverVAD.threshold)
-                            OptionalIntField(title: "Prefix Padding (ms)", value: $viewModel.serverVAD.prefixPaddingMs)
-                            OptionalIntField(
-                                title: "Silence Duration (ms)",
-                                value: $viewModel.serverVAD.silenceDurationMs,
-                            )
-                            OptionalIntField(title: "Idle Timeout (ms)", value: $viewModel.serverVAD.idleTimeoutMs)
-                        }
-                    }
-                }
-
-                GroupBox("Transcript") {
-                    TextEditor(text: $viewModel.transcript)
-                        .font(.body)
-                        .frame(minHeight: 320)
-                }
-
-                Text(configuration.label)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Text(viewModel.status.label)
+                    .font(.headline)
+                    .foregroundStyle(statusColor(for: viewModel.status))
             }
-            .padding(16)
+
+            HStack(alignment: .top, spacing: 16) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        sectionCard("Session") {
+                            VStack(alignment: .leading, spacing: 12) {
+                                APIKeyRow(
+                                    apiKey: $viewModel.apiKeyInput,
+                                    status: $viewModel.apiKeyStatus,
+                                    onSave: viewModel.saveAPIKey,
+                                )
+                                .controlSize(.large)
+
+                                Divider()
+
+                                HStack(spacing: 12) {
+                                    Button(viewModel.isRecording ? "Stop" : "Start") {
+                                        viewModel.isRecording ? viewModel.stop() : viewModel.start()
+                                    }
+                                    .buttonStyle(.borderedProminent)
+
+                                    Button("Clear") {
+                                        viewModel.clearTranscript()
+                                    }
+
+                                    Spacer()
+                                }
+
+                                #if DEBUG
+                                    if let error = viewModel.errorMessage {
+                                        Text("Debug Error: \(error)")
+                                            .font(.caption)
+                                            .foregroundStyle(.red)
+                                    }
+                                #endif
+                            }
+                        }
+
+                        if let updatesView = configuration.updatesView {
+                            DisclosureGroup(
+                                isExpanded: $updatesExpanded,
+                                content: {
+                                    updatesView
+                                        .padding(.top, 8)
+                                },
+                                label: {
+                                    HStack {
+                                        Text("Updates")
+                                            .font(.headline)
+                                        Spacer()
+                                    }
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        withAnimation(.snappy(duration: 0.2)) {
+                                            updatesExpanded.toggle()
+                                        }
+                                    }
+                                },
+                            )
+                            .padding(12)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                            .animation(.snappy(duration: 0.2), value: updatesExpanded)
+                        }
+
+                        sectionCard("Configuration") {
+                            Grid(horizontalSpacing: 12, verticalSpacing: 12) {
+                                GridRow {
+                                    LabeledContent("Model") {
+                                        Picker("Model", selection: $viewModel.model) {
+                                            ForEach(TranscriptionModel.allCases) { model in
+                                                Text(model.displayName).tag(model)
+                                            }
+                                        }
+                                        .labelsHidden()
+                                    }
+                                }
+
+                                GridRow {
+                                    LabeledContent("Language") {
+                                        Picker("Language", selection: $viewModel.language) {
+                                            ForEach(TranscriptionLanguage.allCases) { language in
+                                                Text(language.displayName).tag(language)
+                                            }
+                                        }
+                                        .labelsHidden()
+                                    }
+                                }
+
+                                GridRow {
+                                    LabeledContent("Noise Reduction") {
+                                        Picker("Noise Reduction", selection: $viewModel.noiseReduction) {
+                                            ForEach(NoiseReductionOption.allCases) { option in
+                                                Text(option.displayName).tag(option)
+                                            }
+                                        }
+                                        .labelsHidden()
+                                    }
+                                }
+
+                                GridRow {
+                                    LabeledContent("Mic") {
+                                        Picker("Mic", selection: $viewModel.selectedInputDeviceID) {
+                                            Text("System Default").tag(AudioDeviceID?.none)
+                                            ForEach(viewModel.availableInputDevices) { device in
+                                                Text(device.name).tag(Optional(device.id))
+                                            }
+                                        }
+                                        .labelsHidden()
+                                        .disabled(viewModel.isRecording)
+                                    }
+                                }
+
+                                GridRow {
+                                    LabeledContent("VAD Mode") {
+                                        Picker("", selection: $viewModel.vadMode) {
+                                            ForEach(VADMode.allCases) { mode in
+                                                Text(mode.displayName).tag(mode)
+                                            }
+                                        }
+                                        .pickerStyle(.segmented)
+                                    }
+                                }
+
+                                if viewModel.vadMode == .off {
+                                    GridRow {
+                                        LabeledContent("Commit Interval") {
+                                            Picker("Commit Interval", selection: $viewModel.manualCommitInterval) {
+                                                ForEach(ManualCommitInterval.options) { option in
+                                                    Text(option.label).tag(option)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            if viewModel.vadMode == .server {
+                                DisclosureGroup(
+                                    isExpanded: $serverVADExpanded,
+                                    content: {
+                                        LazyVGrid(columns: tuningColumns, alignment: .leading, spacing: 12) {
+                                            OptionalDoubleField(
+                                                title: "Threshold",
+                                                value: $viewModel.serverVAD.threshold,
+                                            )
+                                            OptionalIntField(
+                                                title: "Prefix Padding (ms)",
+                                                value: $viewModel.serverVAD.prefixPaddingMs,
+                                            )
+                                            OptionalIntField(
+                                                title: "Silence Duration (ms)",
+                                                value: $viewModel.serverVAD.silenceDurationMs,
+                                            )
+                                            OptionalIntField(
+                                                title: "Idle Timeout (ms)",
+                                                value: $viewModel.serverVAD.idleTimeoutMs,
+                                            )
+                                        }
+                                        .padding(.top, 8)
+                                    },
+                                    label: {
+                                        HStack {
+                                            Text("Server VAD Tuning")
+                                            Spacer()
+                                        }
+                                        .contentShape(Rectangle())
+                                        .onTapGesture {
+                                            withAnimation(.snappy(duration: 0.2)) {
+                                                serverVADExpanded.toggle()
+                                            }
+                                        }
+                                    },
+                                )
+                                .padding(.top, 12)
+                                .animation(.snappy(duration: 0.2), value: serverVADExpanded)
+                            }
+                        }
+                    }
+                    .padding(16)
+                }
+                .frame(minWidth: 340, maxWidth: 380, maxHeight: .infinity)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+
+                VStack(alignment: .leading, spacing: 16) {
+                    GroupBox("Transcript") {
+                        TextEditor(text: $viewModel.transcript)
+                            .font(.body)
+                            .frame(minHeight: 560, maxHeight: .infinity)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
-        .frame(minWidth: 720, minHeight: 560)
+        .padding(16)
+        .frame(minWidth: 960, minHeight: 680)
         .onAppear {
             viewModel.refreshInputDevices()
             configuration.onAppear?()
@@ -160,6 +238,19 @@ public struct ContentView: View {
             return .red
         }
         return .secondary
+    }
+
+    private func sectionCard(
+        _ title: String,
+        @ViewBuilder content: () -> some View,
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.headline)
+            content()
+        }
+        .padding(12)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 }
 
