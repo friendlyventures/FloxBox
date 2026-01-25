@@ -33,14 +33,45 @@ final class ShortcutCoordinatorTests: XCTestCase {
         XCTAssertEqual(started, 1)
         XCTAssertEqual(stopped, 1)
     }
+
+    func testCoordinatorDefersRegistrationUntilStart() {
+        let store = ShortcutStore(userDefaults: UserDefaults(suiteName: "ShortcutCoordinatorTestsDeferred")!)
+        let backend = FakeShortcutBackend()
+        let coordinator = ShortcutCoordinator(
+            store: store,
+            backend: backend,
+            actions: ShortcutActions(
+                startRecording: {},
+                stopRecording: {},
+            ),
+        )
+
+        store.upsert(ShortcutDefinition(
+            id: .pushToTalk,
+            name: "Push To Talk",
+            keyCode: 49,
+            modifiers: [.leftOption],
+            behavior: .pushToTalk,
+        ))
+
+        XCTAssertEqual(backend.registerCallCount, 0)
+
+        coordinator.start()
+
+        XCTAssertEqual(backend.registerCallCount, 1)
+    }
 }
 
 private final class FakeShortcutBackend: ShortcutBackend {
     var onTrigger: ((ShortcutTrigger) -> Void)?
+    private(set) var registerCallCount = 0
 
     func start() {}
     func stop() {}
-    func register(_: [ShortcutDefinition]) {}
+    func register(_: [ShortcutDefinition]) {
+        registerCallCount += 1
+    }
+
     func beginCapture(for _: ShortcutID, completion: @escaping (ShortcutDefinition?) -> Void) {
         completion(nil)
     }

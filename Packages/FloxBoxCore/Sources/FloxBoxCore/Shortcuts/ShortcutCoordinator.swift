@@ -20,6 +20,7 @@ public final class ShortcutCoordinator {
     private let backend: ShortcutBackend
     private let actions: ShortcutActions
     private var isRecordingFromShortcut = false
+    private var isStarted = false
 
     public init(store: ShortcutStore, backend: ShortcutBackend, actions: ShortcutActions) {
         self.store = store
@@ -27,7 +28,8 @@ public final class ShortcutCoordinator {
         self.actions = actions
 
         store.onUpdate = { [weak self] shortcuts in
-            self?.backend.register(shortcuts)
+            guard let self, isStarted else { return }
+            backend.register(shortcuts)
         }
 
         backend.onTrigger = { [weak self] trigger in
@@ -45,12 +47,14 @@ public final class ShortcutCoordinator {
     }
 
     public func start() {
+        isStarted = true
         backend.register(store.shortcuts)
         backend.start()
     }
 
     public func stop() {
         backend.stop()
+        isStarted = false
     }
 
     public func beginCapture(for id: ShortcutID, completion: @escaping (ShortcutDefinition?) -> Void) {
