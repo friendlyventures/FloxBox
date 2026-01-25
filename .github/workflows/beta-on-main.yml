@@ -116,27 +116,31 @@ jobs:
             printf '%s\n' '</rss>'
           } > _site/beta/appcast.xml
 
-      - name: Ensure gtar
-        run: |
-          if ! command -v gtar >/dev/null 2>&1; then
-            mkdir -p "$RUNNER_TEMP/gtar"
-            printf '%s\n' '#!/usr/bin/env bash' 'exec /usr/bin/tar "$@"' > "$RUNNER_TEMP/gtar/gtar"
-            chmod +x "$RUNNER_TEMP/gtar/gtar"
-            echo "$RUNNER_TEMP/gtar" >> "$GITHUB_PATH"
-          fi
+      - name: Upload site artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pages-site
+          path: _site
+          retention-days: 1
+
+  deploy-pages:
+    needs: build-beta
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download site artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pages-site
+          path: _site
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
 
-  deploy-pages:
-    needs: build-beta
-    runs-on: self-hosted
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
