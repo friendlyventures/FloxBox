@@ -66,9 +66,9 @@ public struct ServerVADTuning: Equatable {
     public var idleTimeoutMs: Int?
 
     public init(
-        threshold: Double? = nil,
-        prefixPaddingMs: Int? = nil,
-        silenceDurationMs: Int? = nil,
+        threshold: Double? = 0.5,
+        prefixPaddingMs: Int? = 300,
+        silenceDurationMs: Int? = 500,
         idleTimeoutMs: Int? = nil,
     ) {
         self.threshold = threshold

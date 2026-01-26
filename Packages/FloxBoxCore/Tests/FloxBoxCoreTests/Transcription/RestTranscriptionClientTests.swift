@@ -11,12 +11,18 @@ final class RestTranscriptionClientTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: wavURL) }
         try Data([0x00]).write(to: wavURL)
 
-        _ = try await client.transcribe(fileURL: wavURL, model: "gpt-4o-mini-transcribe", language: "en")
+        _ = try await client.transcribe(
+            fileURL: wavURL,
+            model: "gpt-4o-mini-transcribe",
+            language: "en",
+            prompt: "Use sentence case.",
+        )
 
         XCTAssertEqual(recorder.lastRequest?.url?.path, "/v1/audio/transcriptions")
         XCTAssertEqual(recorder.lastRequest?.httpMethod, "POST")
         XCTAssertTrue(recorder.lastBodyString?.contains("gpt-4o-mini-transcribe") == true)
         XCTAssertTrue(recorder.lastBodyString?.contains("filename=\"ptt.wav\"") == true)
+        XCTAssertTrue(recorder.lastBodyString?.contains("Use sentence case.") == true)
     }
 }
 

@@ -59,7 +59,7 @@ public protocol RealtimeTranscriptionClient: AnyObject {
 }
 
 public protocol RestTranscriptionClientProtocol: AnyObject {
-    func transcribe(fileURL: URL, model: String, language: String?) async throws -> String
+    func transcribe(fileURL: URL, model: String, language: String?, prompt: String?) async throws -> String
 }
 
 @MainActor
@@ -82,6 +82,10 @@ public final class TranscriptionViewModel {
     public var model: TranscriptionModel = .defaultModel
     public var language: TranscriptionLanguage = .defaultLanguage
     public var noiseReduction: NoiseReductionOption = .defaultOption
+    public var transcriptionPrompt: String = """
+    You are a transcription assistant. Transcribe the spoken audio accurately.
+    Preserve casing and punctuation. Do not add extra words or commentary.
+    """
     public var availableInputDevices: [AudioInputDevice] = AudioInputDeviceProvider.availableDevices()
     public var selectedInputDeviceID: AudioDeviceID?
     public var vadMode: VADMode = .server
@@ -150,6 +154,11 @@ public final class TranscriptionViewModel {
 
     public var isRecording: Bool {
         status == .recording
+    }
+
+    private var normalizedPrompt: String? {
+        let trimmed = transcriptionPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     public func start() {
@@ -241,6 +250,7 @@ public final class TranscriptionViewModel {
         let config = TranscriptionSessionConfiguration(
             model: model,
             language: language,
+            prompt: normalizedPrompt,
             noiseReduction: noiseReduction.setting,
             vadMode: recordingVADMode,
             serverVAD: serverVAD,
@@ -380,6 +390,7 @@ public final class TranscriptionViewModel {
                 fileURL: wavURL,
                 model: model.rawValue,
                 language: language.code,
+                prompt: normalizedPrompt,
             )
             applyRestTranscription(text)
         } catch {

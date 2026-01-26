@@ -10,14 +10,22 @@ public final class RestTranscriptionClient {
         self.session = session
     }
 
-    public func transcribe(fileURL: URL, model: String, language: String?) async throws -> String {
+    public func transcribe(fileURL: URL, model: String, language: String?,
+                           prompt: String? = nil) async throws -> String
+    {
         let boundary = "Boundary-\(UUID().uuidString)"
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
-        let body = try buildBody(fileURL: fileURL, model: model, language: language, boundary: boundary)
+        let body = try buildBody(
+            fileURL: fileURL,
+            model: model,
+            language: language,
+            prompt: prompt,
+            boundary: boundary,
+        )
         request.httpBody = body
 
         let (data, response) = try await session.data(for: request)
@@ -28,11 +36,20 @@ public final class RestTranscriptionClient {
         return decoded.text
     }
 
-    private func buildBody(fileURL: URL, model: String, language: String?, boundary: String) throws -> Data {
+    private func buildBody(
+        fileURL: URL,
+        model: String,
+        language: String?,
+        prompt: String?,
+        boundary: String,
+    ) throws -> Data {
         var body = Data()
         body.append(formField(name: "model", value: model, boundary: boundary))
         if let language {
             body.append(formField(name: "language", value: language, boundary: boundary))
+        }
+        if let prompt, !prompt.isEmpty {
+            body.append(formField(name: "prompt", value: prompt, boundary: boundary))
         }
         let fileData = try Data(contentsOf: fileURL)
         body.append(fileField(

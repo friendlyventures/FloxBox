@@ -3,6 +3,7 @@ import Foundation
 public struct TranscriptionSessionConfiguration: Equatable {
     public var model: TranscriptionModel
     public var language: TranscriptionLanguage
+    public var prompt: String?
     public var noiseReduction: InputAudioNoiseReduction?
     public var vadMode: VADMode
     public var serverVAD: ServerVADTuning
@@ -11,6 +12,7 @@ public struct TranscriptionSessionConfiguration: Equatable {
     public init(
         model: TranscriptionModel,
         language: TranscriptionLanguage,
+        prompt: String? = nil,
         noiseReduction: InputAudioNoiseReduction? = .farField,
         vadMode: VADMode,
         serverVAD: ServerVADTuning,
@@ -18,6 +20,7 @@ public struct TranscriptionSessionConfiguration: Equatable {
     ) {
         self.model = model
         self.language = language
+        self.prompt = prompt
         self.noiseReduction = noiseReduction
         self.vadMode = vadMode
         self.serverVAD = serverVAD
@@ -46,6 +49,7 @@ public struct RealtimeTranscriptionSessionUpdate: Encodable, Equatable {
             inputAudioTranscription: Transcription(
                 model: configuration.model.rawValue,
                 language: configuration.language.code,
+                prompt: configuration.prompt,
             ),
             inputAudioNoiseReduction: configuration.noiseReduction,
             turnDetection: configuration.turnDetectionSetting,
@@ -56,6 +60,7 @@ public struct RealtimeTranscriptionSessionUpdate: Encodable, Equatable {
     public struct Transcription: Encodable, Equatable {
         public let model: String
         public let language: String
+        public let prompt: String?
     }
 
     public struct Session: Encodable, Equatable {

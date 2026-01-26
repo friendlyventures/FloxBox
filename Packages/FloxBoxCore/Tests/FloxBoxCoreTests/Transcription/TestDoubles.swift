@@ -91,16 +91,18 @@ final class TestRestClient: RestTranscriptionClientProtocol {
     private(set) var lastFileURL: URL?
     private(set) var lastModel: String?
     private(set) var lastLanguage: String?
+    private(set) var lastPrompt: String?
 
     func queueResults(_ results: [Result]) {
         self.results = results
     }
 
-    func transcribe(fileURL: URL, model: String, language: String?) async throws -> String {
+    func transcribe(fileURL: URL, model: String, language: String?, prompt: String?) async throws -> String {
         callCount += 1
         lastFileURL = fileURL
         lastModel = model
         lastLanguage = language
+        lastPrompt = prompt
 
         guard !results.isEmpty else {
             return ""

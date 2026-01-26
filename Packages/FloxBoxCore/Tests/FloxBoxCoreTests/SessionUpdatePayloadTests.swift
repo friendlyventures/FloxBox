@@ -53,6 +53,23 @@ final class SessionUpdatePayloadTests: XCTestCase {
         XCTAssertEqual(transcription?["language"] as? String, "de")
     }
 
+    func testPromptEncodesWhenProvided() throws {
+        let config = TranscriptionSessionConfiguration(
+            model: .gpt4oTranscribe,
+            language: .english,
+            prompt: "Use sentence case.",
+            vadMode: .off,
+            serverVAD: .init(),
+            semanticVAD: .init(),
+        )
+        let update = RealtimeTranscriptionSessionUpdate(configuration: config)
+        let data = try JSONEncoder().encode(update)
+        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let session = json?["session"] as? [String: Any]
+        let transcription = session?["input_audio_transcription"] as? [String: Any]
+        XCTAssertEqual(transcription?["prompt"] as? String, "Use sentence case.")
+    }
+
     func testNoiseReductionEncodesType() throws {
         let config = TranscriptionSessionConfiguration(
             model: .gpt4oTranscribe,
