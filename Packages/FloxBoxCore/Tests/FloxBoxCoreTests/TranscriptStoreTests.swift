@@ -2,6 +2,12 @@
 import XCTest
 
 final class TranscriptStoreTests: XCTestCase {
+    func testAppendFinalTextAddsNewFinalSegment() {
+        let store = TranscriptStore()
+        store.appendFinalText("Hello")
+        XCTAssertEqual(store.displayText, "Hello")
+    }
+
     func testOutOfOrderCompletionsUseCommitOrder() {
         let store = TranscriptStore()
         store.applyCommitted(.init(itemId: "item-1", previousItemId: nil))

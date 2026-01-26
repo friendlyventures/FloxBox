@@ -17,6 +17,10 @@ public final class TranscriptStore {
         segments.removeAll()
     }
 
+    public func appendFinalText(_ text: String, id: String = UUID().uuidString) {
+        applyCompleted(.init(itemId: id, contentIndex: 0, transcript: text))
+    }
+
     public func applyCommitted(_ event: InputAudioCommittedEvent) {
         guard !order.contains(event.itemId) else { return }
         if let previousId = event.previousItemId, let index = order.firstIndex(of: previousId) {
