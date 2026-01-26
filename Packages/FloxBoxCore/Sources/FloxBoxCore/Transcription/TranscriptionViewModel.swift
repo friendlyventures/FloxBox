@@ -294,7 +294,7 @@ public final class TranscriptionViewModel {
             return
         }
 
-        startCommitTimerIfNeeded(vadMode: activeVADMode, allowInterval: trigger == .manual)
+        startCommitTimerIfNeeded(vadMode: activeVADMode)
         status = .recording
         notchOverlay.show()
     }
@@ -342,8 +342,8 @@ public final class TranscriptionViewModel {
         status = .idle
     }
 
-    private func startCommitTimerIfNeeded(vadMode: VADMode, allowInterval: Bool) {
-        guard allowInterval, vadMode == .off, let interval = manualCommitInterval.seconds else { return }
+    private func startCommitTimerIfNeeded(vadMode: VADMode) {
+        guard vadMode == .off, let interval = manualCommitInterval.seconds else { return }
         commitTask = Task { [weak self] in
             while let self, !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: UInt64(interval) * 1_000_000_000)
