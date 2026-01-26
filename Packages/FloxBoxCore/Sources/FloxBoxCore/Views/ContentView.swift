@@ -230,18 +230,28 @@ public struct ContentView: View {
                 .frame(minWidth: 340, maxWidth: 380, maxHeight: .infinity)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
 
-                VStack(alignment: .leading, spacing: 16) {
-                    GroupBox("Transcript") {
-                        TextEditor(text: $viewModel.transcript)
-                            .font(.body)
-                            .frame(minHeight: 560, maxHeight: .infinity)
-                    }
+                GeometryReader { proxy in
+                    let spacing: CGFloat = 16
+                    let availableHeight = max(0, proxy.size.height - spacing)
+                    let transcriptHeight = availableHeight * 0.67
+                    let promptHeight = availableHeight * 0.33
 
-                    GroupBox("Transcription Prompt") {
-                        TextEditor(text: $viewModel.transcriptionPrompt)
-                            .font(.callout)
-                            .frame(minHeight: 120, maxHeight: 180)
+                    VStack(alignment: .leading, spacing: spacing) {
+                        GroupBox("Transcript") {
+                            TextEditor(text: $viewModel.transcript)
+                                .font(.body)
+                                .frame(maxHeight: .infinity)
+                        }
+                        .frame(height: transcriptHeight)
+
+                        GroupBox("Transcription Prompt") {
+                            TextEditor(text: $viewModel.transcriptionPrompt)
+                                .font(.callout)
+                                .frame(maxHeight: .infinity)
+                        }
+                        .frame(height: promptHeight)
                     }
+                    .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
