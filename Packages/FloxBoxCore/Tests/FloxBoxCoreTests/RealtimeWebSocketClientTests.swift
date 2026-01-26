@@ -10,4 +10,10 @@ final class RealtimeWebSocketClientTests: XCTestCase {
     func testBaseURLUsesWss() {
         XCTAssertEqual(RealtimeAPI.baseURL.scheme, "wss")
     }
+
+    func testClearAudioBufferEncodesEvent() throws {
+        let payload = try JSONEncoder().encode(InputAudioBufferClearEvent())
+        let text = String(data: payload, encoding: .utf8)!
+        XCTAssertTrue(text.contains("\"type\":\"input_audio_buffer.clear\""))
+    }
 }

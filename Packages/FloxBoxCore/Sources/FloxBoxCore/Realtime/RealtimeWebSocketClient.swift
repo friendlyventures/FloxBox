@@ -13,6 +13,10 @@ public struct InputAudioBufferCommitEvent: Encodable {
     public let type: String = "input_audio_buffer.commit"
 }
 
+public struct InputAudioBufferClearEvent: Encodable {
+    public let type: String = "input_audio_buffer.clear"
+}
+
 public final class RealtimeWebSocketClient {
     private let apiKey: String
     private let urlSession: URLSession
@@ -57,6 +61,10 @@ public final class RealtimeWebSocketClient {
 
     public func commitAudio() async throws {
         try await send(InputAudioBufferCommitEvent())
+    }
+
+    public func clearAudioBuffer() async throws {
+        try await send(InputAudioBufferClearEvent())
     }
 
     public func close() {
