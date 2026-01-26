@@ -47,6 +47,7 @@ final class TranscriptionViewModelTests: XCTestCase {
             restClient: rest,
             permissionRequester: { true },
             notchOverlay: TestNotchOverlay(),
+            pttTailNanos: 0,
         )
 
         viewModel.apiKeyInput = "sk-test"
@@ -79,6 +80,7 @@ final class TranscriptionViewModelTests: XCTestCase {
             permissionRequester: { true },
             notchOverlay: TestNotchOverlay(),
             restRetryDelayNanos: 1_000_000,
+            pttTailNanos: 0,
         )
 
         viewModel.apiKeyInput = "sk-test"

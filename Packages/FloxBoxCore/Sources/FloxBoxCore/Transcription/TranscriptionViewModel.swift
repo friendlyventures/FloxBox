@@ -125,6 +125,7 @@ public final class TranscriptionViewModel {
     private var restRetryTask: Task<Void, Never>?
     private var restRetryDelayNanos: UInt64
     private var isRestTranscribing = false
+    private var pttTailNanos: UInt64
 
     public init(
         keychain: any KeychainStoring = SystemKeychainStore(),
@@ -135,6 +136,7 @@ public final class TranscriptionViewModel {
         permissionRequester: @escaping () async -> Bool = { await AudioCapture.requestPermission() },
         notchOverlay: (any NotchRecordingControlling)? = nil,
         restRetryDelayNanos: UInt64 = 2_000_000_000,
+        pttTailNanos: UInt64 = 200_000_000,
     ) {
         self.keychain = keychain
         self.audioCapture = audioCapture
@@ -143,6 +145,7 @@ public final class TranscriptionViewModel {
         self.permissionRequester = permissionRequester
         self.notchOverlay = notchOverlay ?? NotchRecordingController()
         self.restRetryDelayNanos = restRetryDelayNanos
+        self.pttTailNanos = pttTailNanos
         do {
             apiKeyInput = try keychain.load() ?? ""
         } catch {
@@ -302,6 +305,9 @@ public final class TranscriptionViewModel {
         notchOverlay.hide()
         commitTask?.cancel()
         commitTask = nil
+        if recordingTrigger == .pushToTalk, status == .recording, pttTailNanos > 0 {
+            try? await Task.sleep(nanoseconds: pttTailNanos)
+        }
         audioCapture.stop()
         await Task.yield()
         finalizeWavCapture()
