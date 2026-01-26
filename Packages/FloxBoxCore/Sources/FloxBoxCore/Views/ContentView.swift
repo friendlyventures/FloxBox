@@ -236,6 +236,12 @@ public struct ContentView: View {
                             .font(.body)
                             .frame(minHeight: 560, maxHeight: .infinity)
                     }
+
+                    GroupBox("Transcription Prompt") {
+                        TextEditor(text: $viewModel.transcriptionPrompt)
+                            .font(.callout)
+                            .frame(minHeight: 120, maxHeight: 180)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
