@@ -51,7 +51,7 @@ final class TranscriptionViewModelTests: XCTestCase {
         )
 
         viewModel.apiKeyInput = "sk-test"
-        await viewModel.startAndWait(trigger: .pushToTalk)
+        await viewModel.startAndWait()
         audio.emit(Data([0x01, 0x02]))
         await Task.yield()
 
@@ -84,7 +84,7 @@ final class TranscriptionViewModelTests: XCTestCase {
         )
 
         viewModel.apiKeyInput = "sk-test"
-        await viewModel.startAndWait(trigger: .pushToTalk)
+        await viewModel.startAndWait()
         audio.emit(Data([0x01]))
         await Task.yield()
 

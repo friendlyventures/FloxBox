@@ -42,11 +42,6 @@ public enum APIKeyStatus: Equatable {
     }
 }
 
-public enum RecordingTrigger: Equatable {
-    case manual
-    case pushToTalk
-}
-
 public protocol AudioCapturing {
     func setPreferredInputDevice(_ deviceID: AudioDeviceID?)
     func start(handler: @escaping (Data) -> Void) throws
@@ -111,7 +106,6 @@ public final class TranscriptionViewModel {
     private var commitTask: Task<Void, Never>?
     private var receiveTask: Task<Void, Never>?
     private var audioSendTask: Task<Void, Never>?
-    private var recordingTrigger: RecordingTrigger = .manual
     private var recordingVADMode: VADMode = .server
     private var hasBufferedAudio = false
     private var awaitingCompletionItemId: String?
@@ -159,19 +153,15 @@ public final class TranscriptionViewModel {
     }
 
     public func start() {
-        start(trigger: .manual)
+        Task { await startInternal() }
     }
 
-    public func start(trigger: RecordingTrigger) {
-        Task { await startInternal(trigger: trigger) }
-    }
-
-    func startAndWait(trigger: RecordingTrigger) async {
-        await startInternal(trigger: trigger)
+    func startAndWait() async {
+        await startInternal()
     }
 
     public func stop() {
-        Task { await stopInternal(waitForCompletion: false) }
+        Task { await stopInternal(waitForCompletion: true) }
     }
 
     public func stopAndWait() async {
@@ -208,11 +198,10 @@ public final class TranscriptionViewModel {
         }
     }
 
-    private func startInternal(trigger: RecordingTrigger) async {
+    private func startInternal() async {
         guard status != .recording else { return }
         errorMessage = nil
         status = .connecting
-        recordingTrigger = trigger
         hasBufferedAudio = false
         awaitingCompletionItemId = nil
         shouldCloseAfterCompletion = false
@@ -247,14 +236,13 @@ public final class TranscriptionViewModel {
         self.client = client
         client.connect()
 
-        let activeVADMode: VADMode = trigger == .pushToTalk ? .off : vadMode
-        recordingVADMode = activeVADMode
+        recordingVADMode = vadMode
 
         let config = TranscriptionSessionConfiguration(
             model: model,
             language: language,
             noiseReduction: noiseReduction.setting,
-            vadMode: activeVADMode,
+            vadMode: recordingVADMode,
             serverVAD: serverVAD,
             semanticVAD: semanticVAD,
         )
@@ -266,10 +254,6 @@ public final class TranscriptionViewModel {
             errorMessage = error.localizedDescription
             notchOverlay.hide()
             return
-        }
-
-        if trigger == .pushToTalk {
-            try? await client.clearAudioBuffer()
         }
 
         receiveTask = Task { [weak self] in
@@ -294,7 +278,7 @@ public final class TranscriptionViewModel {
             return
         }
 
-        startCommitTimerIfNeeded(vadMode: activeVADMode)
+        startCommitTimerIfNeeded(vadMode: recordingVADMode)
         status = .recording
         notchOverlay.show()
     }
@@ -305,35 +289,31 @@ public final class TranscriptionViewModel {
         notchOverlay.hide()
         commitTask?.cancel()
         commitTask = nil
-        if recordingTrigger == .pushToTalk, status == .recording, pttTailNanos > 0 {
+        if status == .recording, pttTailNanos > 0 {
             try? await Task.sleep(nanoseconds: pttTailNanos)
         }
         audioCapture.stop()
         await Task.yield()
         finalizeWavCapture()
 
-        let shouldAwaitCompletion = waitForCompletion && recordingTrigger == .pushToTalk
+        let shouldAwaitCompletion = waitForCompletion
 
-        if recordingTrigger == .pushToTalk, realtimeFailedWhileRecording {
+        if realtimeFailedWhileRecording {
             closeRealtime()
             await startRestFallbackIfNeeded()
             status = .idle
             return
         }
 
-        if recordingVADMode == .off {
-            if hasBufferedAudio {
-                if shouldAwaitCompletion {
-                    shouldCloseAfterCompletion = true
-                }
-                if let audioSendTask {
-                    _ = await audioSendTask.value
-                }
-                try? await client?.commitAudio()
-                if !shouldAwaitCompletion {
-                    closeRealtime()
-                }
-            } else {
+        if hasBufferedAudio {
+            if shouldAwaitCompletion {
+                shouldCloseAfterCompletion = true
+            }
+            if let audioSendTask {
+                _ = await audioSendTask.value
+            }
+            try? await client?.commitAudio()
+            if !shouldAwaitCompletion {
                 closeRealtime()
             }
         } else {
@@ -493,16 +473,14 @@ public final class TranscriptionViewModel {
             }
         case let .error(message):
             errorMessage = message
-            if recordingTrigger == .pushToTalk {
-                realtimeFailedWhileRecording = true
-                if shouldCloseAfterCompletion {
-                    closeRealtime()
-                    await startRestFallbackIfNeeded()
-                }
-                break
+            realtimeFailedWhileRecording = true
+            if shouldCloseAfterCompletion {
+                closeRealtime()
+                await startRestFallbackIfNeeded()
+            } else if status != .recording, status != .connecting {
+                status = .error(message)
+                notchOverlay.hide()
             }
-            status = .error(message)
-            notchOverlay.hide()
         case .unknown:
             break
         }

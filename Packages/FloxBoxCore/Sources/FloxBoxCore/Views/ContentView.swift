@@ -51,7 +51,11 @@ public struct ContentView: View {
 
                                 HStack(spacing: 12) {
                                     Button(viewModel.isRecording ? "Stop" : "Start") {
-                                        viewModel.isRecording ? viewModel.stop() : viewModel.start()
+                                        if viewModel.isRecording {
+                                            Task { await viewModel.stopAndWait() }
+                                        } else {
+                                            viewModel.start()
+                                        }
                                     }
                                     .buttonStyle(.borderedProminent)
 
@@ -246,7 +250,7 @@ public struct ContentView: View {
                 shortcutCoordinator = ShortcutCoordinator(
                     store: shortcutStore,
                     actions: ShortcutActions(
-                        startRecording: { viewModel.start(trigger: .pushToTalk) },
+                        startRecording: { viewModel.start() },
                         stopRecording: { Task { await viewModel.stopAndWait() } },
                     ),
                 )
