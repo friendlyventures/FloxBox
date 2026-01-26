@@ -71,6 +71,9 @@ public protocol RestTranscriptionClientProtocol: AnyObject {
 public protocol NotchRecordingControlling: AnyObject {
     func show()
     func hide()
+    func showToast(_ message: String)
+    func showAction(title: String, handler: @escaping () -> Void)
+    func clearToast()
 }
 
 extension AudioCapture: AudioCapturing {}
@@ -113,6 +116,15 @@ public final class TranscriptionViewModel {
     private var hasBufferedAudio = false
     private var awaitingCompletionItemId: String?
     private var shouldCloseAfterCompletion = false
+    private var activeAPIKey: String?
+    private var wavWriter: WavFileWriter?
+    private var currentWavURL: URL?
+    private var latestWavURL: URL?
+    private var pendingRestWavURL: URL?
+    private var realtimeFailedWhileRecording = false
+    private var restRetryTask: Task<Void, Never>?
+    private var restRetryDelayNanos: UInt64
+    private var isRestTranscribing = false
 
     public init(
         keychain: any KeychainStoring = SystemKeychainStore(),
@@ -122,6 +134,7 @@ public final class TranscriptionViewModel {
         restClient: (any RestTranscriptionClientProtocol)? = nil,
         permissionRequester: @escaping () async -> Bool = { await AudioCapture.requestPermission() },
         notchOverlay: (any NotchRecordingControlling)? = nil,
+        restRetryDelayNanos: UInt64 = 2_000_000_000,
     ) {
         self.keychain = keychain
         self.audioCapture = audioCapture
@@ -129,6 +142,7 @@ public final class TranscriptionViewModel {
         self.restClient = restClient
         self.permissionRequester = permissionRequester
         self.notchOverlay = notchOverlay ?? NotchRecordingController()
+        self.restRetryDelayNanos = restRetryDelayNanos
         do {
             apiKeyInput = try keychain.load() ?? ""
         } catch {
@@ -200,6 +214,12 @@ public final class TranscriptionViewModel {
         awaitingCompletionItemId = nil
         shouldCloseAfterCompletion = false
         audioSendTask = nil
+        realtimeFailedWhileRecording = false
+        restRetryTask?.cancel()
+        restRetryTask = nil
+        isRestTranscribing = false
+        pendingRestWavURL = nil
+        notchOverlay.clearToast()
 
         let apiKey = apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !apiKey.isEmpty else {
@@ -208,6 +228,7 @@ public final class TranscriptionViewModel {
             notchOverlay.hide()
             return
         }
+        activeAPIKey = apiKey
 
         let permitted = await permissionRequester()
         guard permitted else {
@@ -216,6 +237,8 @@ public final class TranscriptionViewModel {
             notchOverlay.hide()
             return
         }
+
+        prepareWavCapture()
 
         let client = realtimeFactory(apiKey)
         self.client = client
@@ -280,8 +303,17 @@ public final class TranscriptionViewModel {
         commitTask?.cancel()
         commitTask = nil
         audioCapture.stop()
+        await Task.yield()
+        finalizeWavCapture()
 
         let shouldAwaitCompletion = waitForCompletion && recordingTrigger == .pushToTalk
+
+        if recordingTrigger == .pushToTalk, realtimeFailedWhileRecording {
+            closeRealtime()
+            await startRestFallbackIfNeeded()
+            status = .idle
+            return
+        }
 
         if recordingVADMode == .off {
             if hasBufferedAudio {
@@ -314,15 +346,113 @@ public final class TranscriptionViewModel {
         }
     }
 
+    private func prepareWavCapture() {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("floxbox-ptt-\(UUID().uuidString).wav")
+        do {
+            let writer = try WavFileWriter(url: url, sampleRate: 24000, channels: 1)
+            wavWriter = writer
+            currentWavURL = url
+        } catch {
+            wavWriter = nil
+            currentWavURL = nil
+        }
+    }
+
+    private func finalizeWavCapture() {
+        guard let writer = wavWriter, let url = currentWavURL else { return }
+        try? writer.finalize()
+        wavWriter = nil
+        currentWavURL = nil
+
+        if hasBufferedAudio {
+            pendingRestWavURL = url
+            if let previous = latestWavURL, previous != url {
+                try? FileManager.default.removeItem(at: previous)
+            }
+            latestWavURL = url
+        } else {
+            pendingRestWavURL = nil
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    private func startRestFallbackIfNeeded() async {
+        guard let wavURL = pendingRestWavURL else { return }
+        await performRestTranscription(wavURL: wavURL, allowRetry: true)
+    }
+
+    private func performRestTranscription(wavURL: URL, allowRetry: Bool) async {
+        guard !isRestTranscribing else { return }
+        guard let restClient = restClientForSession() else { return }
+
+        isRestTranscribing = true
+        defer { isRestTranscribing = false }
+
+        do {
+            let text = try await restClient.transcribe(
+                fileURL: wavURL,
+                model: model.rawValue,
+                language: language.code,
+            )
+            applyRestTranscription(text)
+        } catch {
+            if allowRetry {
+                notchOverlay.showToast("Retrying...")
+                restRetryTask?.cancel()
+                restRetryTask = Task { [weak self] in
+                    guard let self else { return }
+                    try? await Task.sleep(nanoseconds: restRetryDelayNanos)
+                    await performRestTranscription(wavURL: wavURL, allowRetry: false)
+                }
+            } else {
+                showManualRetryAction(for: wavURL)
+            }
+        }
+    }
+
+    private func restClientForSession() -> (any RestTranscriptionClientProtocol)? {
+        if let restClient {
+            return restClient
+        }
+        guard let activeAPIKey else { return nil }
+        return RestTranscriptionClient(apiKey: activeAPIKey)
+    }
+
+    private func applyRestTranscription(_ text: String) {
+        transcriptStore.appendFinalText(text)
+        transcript = transcriptStore.displayText
+        errorMessage = nil
+        realtimeFailedWhileRecording = false
+        pendingRestWavURL = nil
+        restRetryTask?.cancel()
+        restRetryTask = nil
+        notchOverlay.clearToast()
+    }
+
+    private func showManualRetryAction(for wavURL: URL) {
+        notchOverlay.showToast("Transcription failed")
+        notchOverlay.showAction(title: "Retry") { [weak self] in
+            Task { @MainActor in
+                self?.notchOverlay.showToast("Retrying...")
+                await self?.performRestTranscription(wavURL: wavURL, allowRetry: false)
+            }
+        }
+    }
+
     private func enqueueAudioSend(_ data: Data) {
-        guard let client else { return }
+        guard !data.isEmpty else { return }
         hasBufferedAudio = true
+        wavWriter?.append(data)
         let previousTask = audioSendTask
+        let client = client
         audioSendTask = Task {
             if let previousTask {
                 _ = await previousTask.value
             }
-            try? await client.sendAudio(data)
+            if let client {
+                try? await client.sendAudio(data)
+            }
         }
     }
 
@@ -348,6 +478,7 @@ public final class TranscriptionViewModel {
             transcriptStore.applyDelta(delta)
         case let .transcriptionCompleted(completed):
             transcriptStore.applyCompleted(completed)
+            realtimeFailedWhileRecording = false
             if shouldCloseAfterCompletion,
                let awaitingCompletionItemId,
                awaitingCompletionItemId == completed.itemId
@@ -355,8 +486,16 @@ public final class TranscriptionViewModel {
                 closeRealtime()
             }
         case let .error(message):
-            status = .error(message)
             errorMessage = message
+            if recordingTrigger == .pushToTalk {
+                realtimeFailedWhileRecording = true
+                if shouldCloseAfterCompletion {
+                    closeRealtime()
+                    await startRestFallbackIfNeeded()
+                }
+                break
+            }
+            status = .error(message)
             notchOverlay.hide()
         case .unknown:
             break

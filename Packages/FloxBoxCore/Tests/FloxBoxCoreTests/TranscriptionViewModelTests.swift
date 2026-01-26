@@ -64,4 +64,33 @@ final class TranscriptionViewModelTests: XCTestCase {
         XCTAssertTrue(realtime.didClose)
         XCTAssertEqual(viewModel.transcript, "Test")
     }
+
+    func testRealtimeFailureFallsBackToRestWithSingleRetry() async {
+        let realtime = TestRealtimeClient()
+        let audio = TestAudioCapture()
+        let rest = TestRestClient()
+        rest.queueResults([.failure(TestRestError.failure), .success("Rest OK")])
+
+        let viewModel = TranscriptionViewModel(
+            keychain: InMemoryKeychainStore(),
+            audioCapture: audio,
+            realtimeFactory: { _ in realtime },
+            restClient: rest,
+            permissionRequester: { true },
+            notchOverlay: TestNotchOverlay(),
+            restRetryDelayNanos: 1_000_000,
+        )
+
+        viewModel.apiKeyInput = "sk-test"
+        await viewModel.startAndWait(trigger: .pushToTalk)
+        audio.emit(Data([0x01]))
+        await Task.yield()
+
+        realtime.emit(.error("socket failed"))
+        await viewModel.stopAndWait()
+        try? await Task.sleep(nanoseconds: 5_000_000)
+
+        XCTAssertEqual(rest.callCount, 2)
+        XCTAssertEqual(viewModel.transcript, "Rest OK")
+    }
 }

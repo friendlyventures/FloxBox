@@ -120,6 +120,8 @@ final class TestRestClient: RestTranscriptionClientProtocol {
 final class TestNotchOverlay: NotchRecordingControlling {
     private(set) var showCount = 0
     private(set) var hideCount = 0
+    private(set) var toastMessages: [String] = []
+    private(set) var actionTitles: [String] = []
 
     func show() {
         showCount += 1
@@ -128,4 +130,14 @@ final class TestNotchOverlay: NotchRecordingControlling {
     func hide() {
         hideCount += 1
     }
+
+    func showToast(_ message: String) {
+        toastMessages.append(message)
+    }
+
+    func showAction(title: String, handler _: @escaping () -> Void) {
+        actionTitles.append(title)
+    }
+
+    func clearToast() {}
 }

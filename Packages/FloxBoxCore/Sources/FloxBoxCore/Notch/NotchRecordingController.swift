@@ -39,10 +39,13 @@ final class NotchRecordingController {
 
         ensureWindow()
         window?.orderFrontRegardless()
+        state.toastMessage = nil
+        state.action = nil
         state.isRecording = true
         withAnimation(.interpolatingSpring(stiffness: 260, damping: 18)) {
             state.isExpanded = true
         }
+        updateMouseHandling()
     }
 
     func hide() {
@@ -51,11 +54,48 @@ final class NotchRecordingController {
         withAnimation(.easeInOut(duration: 0.18)) {
             state.isExpanded = false
         }
+        updateMouseHandling()
 
         guard let window else { return }
         hideTask = Task { [weak window] in
             try? await Task.sleep(nanoseconds: Constants.closeDelayNanos)
             window?.orderOut(nil)
+        }
+    }
+
+    func showToast(_ message: String) {
+        hideTask?.cancel()
+        hideTask = nil
+        ensureWindow()
+        window?.orderFrontRegardless()
+        state.isRecording = false
+        state.toastMessage = message
+        state.action = nil
+        withAnimation(.interpolatingSpring(stiffness: 260, damping: 18)) {
+            state.isExpanded = true
+        }
+        updateMouseHandling()
+    }
+
+    func showAction(title: String, handler: @escaping () -> Void) {
+        hideTask?.cancel()
+        hideTask = nil
+        ensureWindow()
+        window?.orderFrontRegardless()
+        state.isRecording = false
+        state.action = NotchRecordingAction(title: title, handler: handler)
+        withAnimation(.interpolatingSpring(stiffness: 260, damping: 18)) {
+            state.isExpanded = true
+        }
+        updateMouseHandling()
+    }
+
+    func clearToast() {
+        state.toastMessage = nil
+        state.action = nil
+        updateMouseHandling()
+        if !state.isRecording {
+            hide()
         }
     }
 
@@ -78,11 +118,16 @@ final class NotchRecordingController {
             window.orderOut(nil)
             self.window = window
         }
+        updateMouseHandling()
     }
 
     private func refreshLayoutIfVisible() {
         guard let window, window.isVisible else { return }
         ensureWindow()
+    }
+
+    private func updateMouseHandling() {
+        window?.ignoresMouseEvents = state.action == nil
     }
 
     private func preferredScreen() -> NSScreen? {
