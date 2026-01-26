@@ -246,8 +246,8 @@ public struct ContentView: View {
                 shortcutCoordinator = ShortcutCoordinator(
                     store: shortcutStore,
                     actions: ShortcutActions(
-                        startRecording: { viewModel.start() },
-                        stopRecording: { viewModel.stop() },
+                        startRecording: { viewModel.start(trigger: .pushToTalk) },
+                        stopRecording: { Task { await viewModel.stopAndWait() } },
                     ),
                 )
             }

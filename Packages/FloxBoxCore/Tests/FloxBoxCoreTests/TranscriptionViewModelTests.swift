@@ -35,4 +35,33 @@ final class TranscriptionViewModelTests: XCTestCase {
         XCTAssertNil(try? keychain.load())
         XCTAssertEqual(viewModel.apiKeyStatus, .cleared)
     }
+
+    func testStopWaitsForCompletedBeforeClosingRealtime() async {
+        let realtime = TestRealtimeClient()
+        let audio = TestAudioCapture()
+        let rest = TestRestClient()
+        let viewModel = TranscriptionViewModel(
+            keychain: InMemoryKeychainStore(),
+            audioCapture: audio,
+            realtimeFactory: { _ in realtime },
+            restClient: rest,
+            permissionRequester: { true },
+            notchOverlay: TestNotchOverlay(),
+        )
+
+        viewModel.apiKeyInput = "sk-test"
+        await viewModel.startAndWait(trigger: .pushToTalk)
+        audio.emit(Data([0x01, 0x02]))
+        await Task.yield()
+
+        await viewModel.stopAndWait()
+        XCTAssertFalse(realtime.didClose)
+
+        realtime.emit(.inputAudioCommitted(.init(itemId: "item1", previousItemId: nil)))
+        realtime.emit(.transcriptionCompleted(.init(itemId: "item1", contentIndex: 0, transcript: "Test")))
+        try? await Task.sleep(nanoseconds: 10_000_000)
+
+        XCTAssertTrue(realtime.didClose)
+        XCTAssertEqual(viewModel.transcript, "Test")
+    }
 }

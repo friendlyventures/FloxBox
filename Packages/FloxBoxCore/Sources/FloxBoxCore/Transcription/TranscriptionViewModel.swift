@@ -42,6 +42,42 @@ public enum APIKeyStatus: Equatable {
     }
 }
 
+public enum RecordingTrigger: Equatable {
+    case manual
+    case pushToTalk
+}
+
+public protocol AudioCapturing {
+    func setPreferredInputDevice(_ deviceID: AudioDeviceID?)
+    func start(handler: @escaping (Data) -> Void) throws
+    func stop()
+}
+
+public protocol RealtimeTranscriptionClient: AnyObject {
+    var events: AsyncStream<RealtimeServerEvent> { get }
+    func connect()
+    func sendSessionUpdate(_ update: RealtimeTranscriptionSessionUpdate) async throws
+    func sendAudio(_ data: Data) async throws
+    func commitAudio() async throws
+    func clearAudioBuffer() async throws
+    func close()
+}
+
+public protocol RestTranscriptionClientProtocol: AnyObject {
+    func transcribe(fileURL: URL, model: String, language: String?) async throws -> String
+}
+
+@MainActor
+public protocol NotchRecordingControlling: AnyObject {
+    func show()
+    func hide()
+}
+
+extension AudioCapture: AudioCapturing {}
+extension RealtimeWebSocketClient: RealtimeTranscriptionClient {}
+extension RestTranscriptionClient: RestTranscriptionClientProtocol {}
+extension NotchRecordingController: NotchRecordingControlling {}
+
 @MainActor
 @Observable
 public final class TranscriptionViewModel {
@@ -61,16 +97,38 @@ public final class TranscriptionViewModel {
     public var status: RecordingStatus = .idle
     public var errorMessage: String?
 
-    private let audioCapture = AudioCapture()
+    private let audioCapture: any AudioCapturing
     private let transcriptStore = TranscriptStore()
     private let keychain: any KeychainStoring
-    private let notchOverlay = NotchRecordingController()
-    private var client: RealtimeWebSocketClient?
+    private let realtimeFactory: (String) -> any RealtimeTranscriptionClient
+    private let restClient: (any RestTranscriptionClientProtocol)?
+    private let permissionRequester: () async -> Bool
+    private let notchOverlay: any NotchRecordingControlling
+    private var client: (any RealtimeTranscriptionClient)?
     private var commitTask: Task<Void, Never>?
     private var receiveTask: Task<Void, Never>?
+    private var audioSendTask: Task<Void, Never>?
+    private var recordingTrigger: RecordingTrigger = .manual
+    private var recordingVADMode: VADMode = .server
+    private var hasBufferedAudio = false
+    private var awaitingCompletionItemId: String?
+    private var shouldCloseAfterCompletion = false
 
-    public init(keychain: any KeychainStoring = SystemKeychainStore()) {
+    public init(
+        keychain: any KeychainStoring = SystemKeychainStore(),
+        audioCapture: any AudioCapturing = AudioCapture(),
+        realtimeFactory: @escaping (String)
+            -> any RealtimeTranscriptionClient = { RealtimeWebSocketClient(apiKey: $0) },
+        restClient: (any RestTranscriptionClientProtocol)? = nil,
+        permissionRequester: @escaping () async -> Bool = { await AudioCapture.requestPermission() },
+        notchOverlay: (any NotchRecordingControlling)? = nil,
+    ) {
         self.keychain = keychain
+        self.audioCapture = audioCapture
+        self.realtimeFactory = realtimeFactory
+        self.restClient = restClient
+        self.permissionRequester = permissionRequester
+        self.notchOverlay = notchOverlay ?? NotchRecordingController()
         do {
             apiKeyInput = try keychain.load() ?? ""
         } catch {
@@ -84,11 +142,23 @@ public final class TranscriptionViewModel {
     }
 
     public func start() {
-        Task { await startInternal() }
+        start(trigger: .manual)
+    }
+
+    public func start(trigger: RecordingTrigger) {
+        Task { await startInternal(trigger: trigger) }
+    }
+
+    func startAndWait(trigger: RecordingTrigger) async {
+        await startInternal(trigger: trigger)
     }
 
     public func stop() {
-        Task { await stopInternal() }
+        Task { await stopInternal(waitForCompletion: false) }
+    }
+
+    public func stopAndWait() async {
+        await stopInternal(waitForCompletion: true)
     }
 
     public func clearTranscript() {
@@ -121,10 +191,15 @@ public final class TranscriptionViewModel {
         }
     }
 
-    private func startInternal() async {
+    private func startInternal(trigger: RecordingTrigger) async {
         guard status != .recording else { return }
         errorMessage = nil
         status = .connecting
+        recordingTrigger = trigger
+        hasBufferedAudio = false
+        awaitingCompletionItemId = nil
+        shouldCloseAfterCompletion = false
+        audioSendTask = nil
 
         let apiKey = apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !apiKey.isEmpty else {
@@ -134,7 +209,7 @@ public final class TranscriptionViewModel {
             return
         }
 
-        let permitted = await AudioCapture.requestPermission()
+        let permitted = await permissionRequester()
         guard permitted else {
             status = .error("Microphone permission denied")
             errorMessage = "Microphone permission denied"
@@ -142,15 +217,18 @@ public final class TranscriptionViewModel {
             return
         }
 
-        let client = RealtimeWebSocketClient(apiKey: apiKey)
+        let client = realtimeFactory(apiKey)
         self.client = client
         client.connect()
+
+        let activeVADMode: VADMode = trigger == .pushToTalk ? .off : vadMode
+        recordingVADMode = activeVADMode
 
         let config = TranscriptionSessionConfiguration(
             model: model,
             language: language,
             noiseReduction: noiseReduction.setting,
-            vadMode: vadMode,
+            vadMode: activeVADMode,
             serverVAD: serverVAD,
             semanticVAD: semanticVAD,
         )
@@ -164,6 +242,10 @@ public final class TranscriptionViewModel {
             return
         }
 
+        if trigger == .pushToTalk {
+            try? await client.clearAudioBuffer()
+        }
+
         receiveTask = Task { [weak self] in
             guard let self else { return }
             for await event in client.events {
@@ -174,9 +256,9 @@ public final class TranscriptionViewModel {
         do {
             audioCapture.setPreferredInputDevice(selectedInputDeviceID)
             try audioCapture.start { [weak self] data in
-                guard let self, let client = self.client else { return }
-                Task {
-                    try? await client.sendAudio(data)
+                guard let self else { return }
+                Task { @MainActor in
+                    self.enqueueAudioSend(data)
                 }
             }
         } catch {
@@ -186,12 +268,12 @@ public final class TranscriptionViewModel {
             return
         }
 
-        startCommitTimerIfNeeded()
+        startCommitTimerIfNeeded(vadMode: activeVADMode, allowInterval: trigger == .manual)
         status = .recording
         notchOverlay.show()
     }
 
-    private func stopInternal() async {
+    private func stopInternal(waitForCompletion: Bool) async {
         guard status == .recording || status == .connecting else { return }
 
         notchOverlay.hide()
@@ -199,19 +281,31 @@ public final class TranscriptionViewModel {
         commitTask = nil
         audioCapture.stop()
 
-        if vadMode == .off {
-            try? await client?.commitAudio()
-        }
+        let shouldAwaitCompletion = waitForCompletion && recordingTrigger == .pushToTalk
 
-        client?.close()
-        client = nil
-        receiveTask?.cancel()
-        receiveTask = nil
+        if recordingVADMode == .off {
+            if hasBufferedAudio {
+                if shouldAwaitCompletion {
+                    shouldCloseAfterCompletion = true
+                }
+                if let audioSendTask {
+                    _ = await audioSendTask.value
+                }
+                try? await client?.commitAudio()
+                if !shouldAwaitCompletion {
+                    closeRealtime()
+                }
+            } else {
+                closeRealtime()
+            }
+        } else {
+            closeRealtime()
+        }
         status = .idle
     }
 
-    private func startCommitTimerIfNeeded() {
-        guard vadMode == .off, let interval = manualCommitInterval.seconds else { return }
+    private func startCommitTimerIfNeeded(vadMode: VADMode, allowInterval: Bool) {
+        guard allowInterval, vadMode == .off, let interval = manualCommitInterval.seconds else { return }
         commitTask = Task { [weak self] in
             while let self, !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: UInt64(interval) * 1_000_000_000)
@@ -220,14 +314,46 @@ public final class TranscriptionViewModel {
         }
     }
 
+    private func enqueueAudioSend(_ data: Data) {
+        guard let client else { return }
+        hasBufferedAudio = true
+        let previousTask = audioSendTask
+        audioSendTask = Task {
+            if let previousTask {
+                _ = await previousTask.value
+            }
+            try? await client.sendAudio(data)
+        }
+    }
+
+    private func closeRealtime() {
+        client?.close()
+        client = nil
+        receiveTask?.cancel()
+        receiveTask = nil
+        audioSendTask?.cancel()
+        audioSendTask = nil
+        shouldCloseAfterCompletion = false
+        awaitingCompletionItemId = nil
+    }
+
     private func handle(_ event: RealtimeServerEvent) async {
         switch event {
         case let .inputAudioCommitted(committed):
             transcriptStore.applyCommitted(committed)
+            if shouldCloseAfterCompletion, awaitingCompletionItemId == nil {
+                awaitingCompletionItemId = committed.itemId
+            }
         case let .transcriptionDelta(delta):
             transcriptStore.applyDelta(delta)
         case let .transcriptionCompleted(completed):
             transcriptStore.applyCompleted(completed)
+            if shouldCloseAfterCompletion,
+               let awaitingCompletionItemId,
+               awaitingCompletionItemId == completed.itemId
+            {
+                closeRealtime()
+            }
         case let .error(message):
             status = .error(message)
             errorMessage = message
