@@ -20,6 +20,12 @@ public struct MenubarMenu: View {
             openWindow(id: "settings")
         }
 
+        if let checkForUpdates = model.configuration.checkForUpdates {
+            Button("Check for Updates") {
+                checkForUpdates()
+            }
+        }
+
         if !permissionsViewModel.allGranted {
             Divider()
             Button("Permissions") {
@@ -32,5 +38,9 @@ public struct MenubarMenu: View {
         Button("Quit") {
             NSApplication.shared.terminate(nil)
         }
+    }
+
+    var hasCheckForUpdatesAction: Bool {
+        model.configuration.checkForUpdates != nil
     }
 }

@@ -4,7 +4,6 @@ import SwiftUI
 
 public struct DebugPanelView: View {
     public let model: FloxBoxAppModel
-    @State private var updatesExpanded = false
     @State private var serverVADExpanded = false
     private let tuningColumns = [GridItem(.adaptive(minimum: 200), spacing: 12)]
 
@@ -80,32 +79,6 @@ public struct DebugPanelView: View {
                                     coordinator: shortcutCoordinator,
                                 )
                             }
-                        }
-
-                        if let updatesView = model.configuration.updatesView {
-                            DisclosureGroup(
-                                isExpanded: $updatesExpanded,
-                                content: {
-                                    updatesView
-                                        .padding(.top, 8)
-                                },
-                                label: {
-                                    HStack {
-                                        Text("Updates")
-                                            .font(.headline)
-                                        Spacer()
-                                    }
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        withAnimation(.snappy(duration: 0.2)) {
-                                            updatesExpanded.toggle()
-                                        }
-                                    }
-                                },
-                            )
-                            .padding(12)
-                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-                            .animation(.snappy(duration: 0.2), value: updatesExpanded)
                         }
 
                         sectionCard("Configuration") {

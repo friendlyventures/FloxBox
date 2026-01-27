@@ -11,4 +11,9 @@ final class FloxBoxDistributionTests: XCTestCase {
         let model = FloxBoxAppModel.preview(configuration: .appStore)
         _ = FloxBoxAppRoot.makeScene(model: model)
     }
+
+    func testDirectConfigExposesCheckForUpdatesAction() {
+        let config = FloxBoxDistributionConfiguration(label: "Direct", checkForUpdates: {})
+        XCTAssertNotNil(config.checkForUpdates)
+    }
 }

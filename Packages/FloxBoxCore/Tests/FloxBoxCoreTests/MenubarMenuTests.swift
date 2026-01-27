@@ -8,4 +8,11 @@ final class MenubarMenuTests: XCTestCase {
         let model = FloxBoxAppModel.preview(configuration: .appStore)
         _ = MenubarMenu(model: model)
     }
+
+    func testMenuBuildsWithUpdatesAction() {
+        let config = FloxBoxDistributionConfiguration(label: "Direct", checkForUpdates: {})
+        let model = FloxBoxAppModel.preview(configuration: config)
+        let menu = MenubarMenu(model: model)
+        XCTAssertTrue(menu.hasCheckForUpdatesAction)
+    }
 }

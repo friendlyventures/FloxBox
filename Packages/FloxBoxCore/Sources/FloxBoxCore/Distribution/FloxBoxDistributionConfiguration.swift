@@ -3,15 +3,18 @@ import SwiftUI
 public struct FloxBoxDistributionConfiguration: Equatable {
     public let label: String
     public let updatesView: AnyView?
+    public let checkForUpdates: (() -> Void)?
     public let onAppear: (() -> Void)?
 
     public init(
         label: String,
         updatesView: AnyView? = nil,
+        checkForUpdates: (() -> Void)? = nil,
         onAppear: (() -> Void)? = nil,
     ) {
         self.label = label
         self.updatesView = updatesView
+        self.checkForUpdates = checkForUpdates
         self.onAppear = onAppear
     }
 

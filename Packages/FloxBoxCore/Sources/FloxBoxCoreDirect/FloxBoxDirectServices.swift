@@ -9,6 +9,9 @@ public enum FloxBoxDirectServices {
         FloxBoxDistributionConfiguration(
             label: FloxBoxDistributionConfiguration.direct.label,
             updatesView: AnyView(UpdatesView(updaterController: updaterController)),
+            checkForUpdates: {
+                updaterController.checkForUpdates()
+            },
             onAppear: {
                 Task { @MainActor in
                     updaterController.checkForUpdatesOnLaunchIfNeeded()
