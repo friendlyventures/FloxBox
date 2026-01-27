@@ -4,49 +4,6 @@ import CoreAudio
 import Foundation
 import Observation
 
-public enum RecordingStatus: Equatable {
-    case idle
-    case connecting
-    case recording
-    case awaitingNetwork
-    case error(String)
-
-    public var label: String {
-        switch self {
-        case .idle:
-            "Idle"
-        case .connecting:
-            "Connecting"
-        case .recording:
-            "Recording"
-        case .awaitingNetwork:
-            "Awaiting Network"
-        case .error:
-            "Error"
-        }
-    }
-}
-
-public enum APIKeyStatus: Equatable {
-    case idle
-    case saved
-    case cleared
-    case error(String)
-
-    public var message: String? {
-        switch self {
-        case .idle:
-            nil
-        case .saved:
-            "Saved"
-        case .cleared:
-            "Cleared"
-        case let .error(message):
-            message
-        }
-    }
-}
-
 public protocol AudioCapturing {
     func setPreferredInputDevice(_ deviceID: AudioDeviceID?)
     func start(handler: @escaping (Data) -> Void) throws
@@ -153,6 +110,7 @@ public final class TranscriptionViewModel {
     private var isRestTranscribing = false
     private var pttTailNanos: UInt64
     private var didFinishInjection = false
+    private var didEndAudioHistorySession = false
 
     public init(
         keychain: any KeychainStoring = SystemKeychainStore(),
@@ -325,6 +283,7 @@ public final class TranscriptionViewModel {
         isRestTranscribing = false
         pendingRestWavURL = nil
         didFinishInjection = false
+        didEndAudioHistorySession = false
         toastPresenter.clearToast()
     }
 
@@ -891,6 +850,7 @@ public final class TranscriptionViewModel {
     }
 
     private func finalizeDictationInjectionIfNeeded() {
+        finalizeAudioHistorySessionIfNeeded()
         guard !didFinishInjection else { return }
         didFinishInjection = true
         let result = dictationInjector.finishSession()
@@ -899,6 +859,16 @@ public final class TranscriptionViewModel {
         guard !text.isEmpty else { return }
         clipboardWriter(text)
         toastPresenter.showToast("Unable to insert text. Paste with Command+V.")
+    }
+
+    private func finalizeAudioHistorySessionIfNeeded() {
+        guard !didEndAudioHistorySession else { return }
+        didEndAudioHistorySession = true
+        Task { [weak self] in
+            guard let self else { return }
+            await audioHistoryRecorder.endSession(endedAt: Date())
+            await refreshAudioHistory()
+        }
     }
 
     private struct PostApplyActions {

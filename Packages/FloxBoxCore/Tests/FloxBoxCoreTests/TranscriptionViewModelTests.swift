@@ -147,6 +147,50 @@ final class TranscriptionViewModelTests: XCTestCase {
         XCTAssertEqual(sessions.first?.chunks.first?.byteCount ?? 0, 0)
     }
 
+    func testWireAudioHistoryCreatesFallbackChunkWhenNoCommitEvent() async throws {
+        let realtime = TestRealtimeClient()
+        let audio = TestAudioCapture()
+        let rest = TestRestClient()
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: base) }
+        let store = DictationAudioHistoryStore(baseURL: base)
+
+        let viewModel = TranscriptionViewModel(
+            keychain: InMemoryKeychainStore(),
+            audioCapture: audio,
+            realtimeFactory: { _ in realtime },
+            restClient: rest,
+            permissionRequester: { true },
+            notchOverlay: TestNotchOverlay(),
+            restRetryDelayNanos: 1_000_000,
+            realtimeCompletionTimeoutNanos: 1_000_000,
+            restTimeoutNanos: 5_000_000,
+            pttTailNanos: 0,
+            accessibilityChecker: { true },
+            secureInputChecker: { false },
+            permissionsPresenter: {},
+            dictationInjector: TestDictationInjector(),
+            clipboardWriter: { _ in },
+            audioHistoryStore: store,
+        )
+
+        viewModel.apiKeyInput = "sk-test"
+        await viewModel.startAndWait()
+        audio.emit(Data([0x01, 0x02]))
+        for _ in 0 ..< 10 where realtime.sentAudio.isEmpty {
+            try? await Task.sleep(nanoseconds: 1_000_000)
+        }
+        XCTAssertFalse(realtime.sentAudio.isEmpty)
+
+        await viewModel.stopAndWait()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        let sessions = viewModel.dictationAudioHistorySessions
+        XCTAssertEqual(sessions.count, 1)
+        let chunkId = sessions.first?.chunks.first?.id ?? ""
+        XCTAssertTrue(chunkId.hasPrefix("uncommitted-"))
+    }
+
     func testRealtimeFailureFallsBackToRestWithSingleRetry() async {
         let realtime = TestRealtimeClient()
         let audio = TestAudioCapture()
