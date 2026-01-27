@@ -65,6 +65,7 @@ public final class EventTapShortcutBackend: ShortcutBackend {
     }
 
     public func start() {
+        ShortcutDebugLogger.log("backend.start")
         attemptStart()
     }
 
@@ -77,6 +78,7 @@ public final class EventTapShortcutBackend: ShortcutBackend {
                 hasRequestedListenEventAccess = true
             }
             onStatusChange?("Enable Input Monitoring for FloxBox in System Settings")
+            ShortcutDebugLogger.log("backend.missingInputMonitoring")
             scheduleRetry()
             return
         }
@@ -97,6 +99,7 @@ public final class EventTapShortcutBackend: ShortcutBackend {
             Unmanaged.passUnretained(self).toOpaque(),
         ) else {
             onStatusChange?("Enable Input Monitoring for FloxBox in System Settings")
+            ShortcutDebugLogger.log("backend.tapCreateFailed")
             scheduleRetry()
             return
         }
@@ -111,6 +114,7 @@ public final class EventTapShortcutBackend: ShortcutBackend {
         clearRetryTimer()
         hasRequestedListenEventAccess = false
         onStatusChange?(nil)
+        ShortcutDebugLogger.log("backend.tapEnabled")
     }
 
     public func stop() {
@@ -120,6 +124,7 @@ public final class EventTapShortcutBackend: ShortcutBackend {
         self.runLoopSource = nil
         self.eventTap = nil
         clearRetryTimer()
+        ShortcutDebugLogger.log("backend.stop")
     }
 
     public func register(_ shortcuts: [ShortcutDefinition]) {
@@ -136,6 +141,15 @@ public final class EventTapShortcutBackend: ShortcutBackend {
     }
 
     private func handleEvent(proxy _: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent> {
+        let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
+        let repeatFlag = event.getIntegerValueField(.keyboardEventAutorepeat)
+        let tapLog = [
+            "tap type=\(type.rawValue)",
+            "key=\(keyCode)",
+            "flags=\(event.flags.rawValue)",
+            "repeat=\(repeatFlag)",
+        ].joined(separator: " ")
+        ShortcutDebugLogger.log(tapLog)
         guard let shortcutEvent = shortcutEvent(for: type, event: event) else {
             return Unmanaged.passUnretained(event)
         }
@@ -146,6 +160,13 @@ public final class EventTapShortcutBackend: ShortcutBackend {
 
         handleCapture(previousState: previousState, currentState: currentState)
         emitTriggers(triggers)
+
+        let stateLog = [
+            "state modifiers=\(currentState.modifiers.displayString)",
+            "key=\(String(describing: currentState.pressedKeyCode))",
+            "triggers=\(String(describing: triggers))",
+        ].joined(separator: " ")
+        ShortcutDebugLogger.log(stateLog)
 
         return Unmanaged.passUnretained(event)
     }
@@ -159,7 +180,8 @@ public final class EventTapShortcutBackend: ShortcutBackend {
         case .keyUp:
             return .keyUp(keyCode: keyCode)
         case .flagsChanged:
-            return .flagsChanged(keyCode: keyCode)
+            let isDown = isModifierDown(keyCode: keyCode, flags: event.flags)
+            return .flagsChanged(keyCode: keyCode, isDown: isDown)
         default:
             return nil
         }
@@ -210,6 +232,21 @@ public final class EventTapShortcutBackend: ShortcutBackend {
     private func clearRetryTimer() {
         retryTimer?.invalidate()
         retryTimer = nil
+    }
+
+    private func isModifierDown(keyCode: UInt16, flags: CGEventFlags) -> Bool {
+        switch keyCode {
+        case ModifierKeyCode.leftCommand, ModifierKeyCode.rightCommand:
+            flags.contains(.maskCommand)
+        case ModifierKeyCode.leftShift, ModifierKeyCode.rightShift:
+            flags.contains(.maskShift)
+        case ModifierKeyCode.leftOption, ModifierKeyCode.rightOption:
+            flags.contains(.maskAlternate)
+        case ModifierKeyCode.leftControl, ModifierKeyCode.rightControl:
+            flags.contains(.maskControl)
+        default:
+            false
+        }
     }
 }
 

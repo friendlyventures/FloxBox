@@ -3,7 +3,7 @@ import Foundation
 public enum ShortcutEvent: Equatable {
     case keyDown(keyCode: UInt16)
     case keyUp(keyCode: UInt16)
-    case flagsChanged(keyCode: UInt16)
+    case flagsChanged(keyCode: UInt16, isDown: Bool)
 }
 
 public enum ShortcutTriggerPhase: Equatable {
@@ -51,12 +51,12 @@ struct ChordState: Equatable {
 
     mutating func apply(_ event: ShortcutEvent) {
         switch event {
-        case let .flagsChanged(keyCode):
+        case let .flagsChanged(keyCode, isDown):
             guard let modifier = ModifierKeyCode.modifier(for: keyCode) else { return }
-            if modifiers.contains(modifier) {
-                modifiers.remove(modifier)
-            } else {
+            if isDown {
                 modifiers.insert(modifier)
+            } else {
+                modifiers.remove(modifier)
             }
         case let .keyDown(keyCode):
             pressedKeyCode = keyCode
@@ -93,7 +93,7 @@ public struct ShortcutEventProcessor {
         if shortcut.modifiers != state.modifiers { return false }
         switch shortcut.keyCode {
         case nil:
-            return state.pressedKeyCode == nil
+            return true
         case let keyCode:
             return state.pressedKeyCode == keyCode
         }

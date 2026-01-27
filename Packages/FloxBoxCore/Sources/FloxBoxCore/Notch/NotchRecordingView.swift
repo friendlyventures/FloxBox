@@ -4,13 +4,6 @@ final class NotchRecordingState: ObservableObject {
     @Published var isRecording = false
     @Published var isExpanded = false
     @Published var layout = NotchRecordingLayout.placeholder
-    @Published var toastMessage: String?
-    @Published var action: NotchRecordingAction?
-}
-
-struct NotchRecordingAction {
-    let title: String
-    let handler: () -> Void
 }
 
 struct NotchRecordingLayout: Equatable {
@@ -51,18 +44,12 @@ struct NotchRecordingView: View {
                     HStack(spacing: 8) {
                         FakeWaveformView()
                         Spacer(minLength: 8)
-                        VIndicator()
+                        RightIcon()
                     }
                     .padding(.horizontal, 12)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .opacity(state.isExpanded ? 1 : 0)
                     .animation(.easeInOut(duration: 0.12), value: state.isExpanded)
-                } else if state.toastMessage != nil || state.action != nil {
-                    NotchToastView(message: state.toastMessage, action: state.action)
-                        .padding(.horizontal, 12)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .opacity(state.isExpanded ? 1 : 0)
-                        .animation(.easeInOut(duration: 0.12), value: state.isExpanded)
                 }
             }
             .animation(.interpolatingSpring(stiffness: 260, damping: 18), value: state.isExpanded)
@@ -92,7 +79,7 @@ struct FakeWaveformView: View {
     }
 }
 
-struct VIndicator: View {
+struct RightIcon: View {
     var body: some View {
         Image(systemName: "text.word.spacing")
             .font(.system(size: 11, weight: .semibold))
@@ -103,45 +90,5 @@ struct VIndicator: View {
                 Capsule()
                     .fill(Color.white.opacity(0.12)),
             )
-    }
-}
-
-struct NotchToastView: View {
-    let message: String?
-    let action: NotchRecordingAction?
-
-    var body: some View {
-        HStack(spacing: 8) {
-            if let message {
-                Text(message)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .lineLimit(1)
-            }
-
-            if let action {
-                NotchActionButton(title: action.title, action: action.handler)
-            }
-        }
-    }
-}
-
-struct NotchActionButton: View {
-    let title: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.9))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(
-                    Capsule()
-                        .fill(Color.white.opacity(0.18)),
-                )
-        }
-        .buttonStyle(.plain)
     }
 }

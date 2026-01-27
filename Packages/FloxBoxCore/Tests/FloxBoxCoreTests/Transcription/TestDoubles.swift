@@ -53,6 +53,61 @@ final class TestRealtimeClient: RealtimeTranscriptionClient {
     }
 }
 
+final class BlockingRealtimeClient: RealtimeTranscriptionClient {
+    private let stream: AsyncStream<RealtimeServerEvent>
+    private let continuation: AsyncStream<RealtimeServerEvent>.Continuation
+    private var sessionUpdateContinuation: CheckedContinuation<Void, Never>?
+    private(set) var didConnect = false
+    private(set) var didStartSessionUpdate = false
+    private(set) var sentAudio: [Data] = []
+    private(set) var sessionUpdates: [RealtimeTranscriptionSessionUpdate] = []
+    private(set) var commitCount = 0
+    private(set) var clearCount = 0
+
+    init() {
+        var continuation: AsyncStream<RealtimeServerEvent>.Continuation!
+        stream = AsyncStream { continuation = $0 }
+        self.continuation = continuation
+    }
+
+    var events: AsyncStream<RealtimeServerEvent> {
+        stream
+    }
+
+    func connect() {
+        didConnect = true
+    }
+
+    func sendSessionUpdate(_ update: RealtimeTranscriptionSessionUpdate) async throws {
+        didStartSessionUpdate = true
+        await withCheckedContinuation { continuation in
+            sessionUpdateContinuation = continuation
+        }
+        sessionUpdates.append(update)
+    }
+
+    func sendAudio(_ data: Data) async throws {
+        sentAudio.append(data)
+    }
+
+    func commitAudio() async throws {
+        commitCount += 1
+    }
+
+    func clearAudioBuffer() async throws {
+        clearCount += 1
+    }
+
+    func close() {
+        continuation.finish()
+    }
+
+    func unblockSessionUpdate() {
+        sessionUpdateContinuation?.resume()
+        sessionUpdateContinuation = nil
+    }
+}
+
 final class TestAudioCapture: AudioCapturing {
     private var handler: ((Data) -> Void)?
     private(set) var isRunning = false
@@ -122,8 +177,6 @@ final class TestRestClient: RestTranscriptionClientProtocol {
 final class TestNotchOverlay: NotchRecordingControlling {
     private(set) var showCount = 0
     private(set) var hideCount = 0
-    private(set) var toastMessages: [String] = []
-    private(set) var actionTitles: [String] = []
 
     func show() {
         showCount += 1
@@ -132,6 +185,12 @@ final class TestNotchOverlay: NotchRecordingControlling {
     func hide() {
         hideCount += 1
     }
+}
+
+@MainActor
+final class TestToastPresenter: ToastPresenting {
+    private(set) var toastMessages: [String] = []
+    private(set) var actionTitles: [String] = []
 
     func showToast(_ message: String) {
         toastMessages.append(message)
@@ -142,4 +201,29 @@ final class TestNotchOverlay: NotchRecordingControlling {
     }
 
     func clearToast() {}
+}
+
+@MainActor
+final class TestDictationInjector: DictationInjectionControlling {
+    private(set) var startCount = 0
+    private(set) var appliedTexts: [String] = []
+    private(set) var finishCount = 0
+    private(set) var events: [String] = []
+    var result = DictationInjectionResult(requiresClipboardFallback: false)
+
+    func startSession() {
+        startCount += 1
+        events.append("start")
+    }
+
+    func apply(text: String) {
+        appliedTexts.append(text)
+        events.append("apply:\(text)")
+    }
+
+    func finishSession() -> DictationInjectionResult {
+        finishCount += 1
+        events.append("finish")
+        return result
+    }
 }

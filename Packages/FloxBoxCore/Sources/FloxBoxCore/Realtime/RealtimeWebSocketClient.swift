@@ -21,6 +21,7 @@ public final class RealtimeWebSocketClient {
     private let apiKey: String
     private let urlSession: URLSession
     private var socket: URLSessionWebSocketTask?
+    private var didReceiveFirstEvent = false
 
     private let stream: AsyncStream<RealtimeServerEvent>
     private let continuation: AsyncStream<RealtimeServerEvent>.Continuation
@@ -45,6 +46,7 @@ public final class RealtimeWebSocketClient {
         #if DEBUG
             debugLog("Connecting to \(RealtimeAPI.baseURL.absoluteString)")
         #endif
+        DebugLog.recording("realtime.connect called uptime=\(ProcessInfo.processInfo.systemUptime)")
         let socket = urlSession.webSocketTask(with: request)
         self.socket = socket
         socket.resume()
@@ -105,6 +107,11 @@ public final class RealtimeWebSocketClient {
                         data = Data(text.utf8)
                     @unknown default:
                         continue
+                    }
+
+                    if let self, !self.didReceiveFirstEvent {
+                        didReceiveFirstEvent = true
+                        DebugLog.recording("realtime.receive.first uptime=\(ProcessInfo.processInfo.systemUptime)")
                     }
 
                     if let event = try? RealtimeEventDecoder.decode(data) {

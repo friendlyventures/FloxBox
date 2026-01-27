@@ -15,6 +15,7 @@ public final class TranscriptStore {
     public func reset() {
         order.removeAll()
         segments.removeAll()
+        ShortcutDebugLogger.log("transcript.reset")
     }
 
     public func appendFinalText(_ text: String, id: String = UUID().uuidString) {
@@ -26,10 +27,13 @@ public final class TranscriptStore {
         if let previousId = event.previousItemId, let index = order.firstIndex(of: previousId) {
             order.insert(event.itemId, at: index + 1)
         } else if event.previousItemId == nil {
-            order.insert(event.itemId, at: 0)
+            order.append(event.itemId)
         } else {
             order.append(event.itemId)
         }
+        ShortcutDebugLogger.log(
+            "transcript.committed item=\(event.itemId) prev=\(event.previousItemId ?? "nil") orderCount=\(order.count)",
+        )
     }
 
     public func applyDelta(_ event: TranscriptionDeltaEvent) {
@@ -48,6 +52,9 @@ public final class TranscriptStore {
         if !order.contains(event.itemId) {
             order.append(event.itemId)
         }
+        ShortcutDebugLogger.log(
+            "transcript.completed item=\(event.itemId) len=\(event.transcript.count) orderCount=\(order.count)",
+        )
     }
 
     public var displayText: String {

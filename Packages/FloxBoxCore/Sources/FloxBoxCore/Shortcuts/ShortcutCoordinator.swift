@@ -66,10 +66,16 @@ public final class ShortcutCoordinator {
         case .pressed:
             guard !isRecordingFromShortcut else { return }
             isRecordingFromShortcut = true
+            ShortcutDebugLogger.log("shortcut pressed id=\(trigger.id.rawValue)")
+            DebugLog
+                .recording("shortcut.pressed id=\(trigger.id.rawValue) uptime=\(ProcessInfo.processInfo.systemUptime)")
             actions.startRecording()
         case .released:
             guard isRecordingFromShortcut else { return }
             isRecordingFromShortcut = false
+            ShortcutDebugLogger.log("shortcut released id=\(trigger.id.rawValue)")
+            DebugLog
+                .recording("shortcut.released id=\(trigger.id.rawValue) uptime=\(ProcessInfo.processInfo.systemUptime)")
             actions.stopRecording()
         }
     }

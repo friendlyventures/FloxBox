@@ -29,4 +29,15 @@ final class TranscriptStoreTests: XCTestCase {
         store.applyCompleted(.init(itemId: "item-1", contentIndex: 0, transcript: "Hello there"))
         XCTAssertEqual(store.displayText, "Hello there")
     }
+
+    func testCommittedItemsWithoutPreviousIdPreserveArrivalOrder() {
+        let store = TranscriptStore()
+        store.applyCommitted(.init(itemId: "item-1", previousItemId: nil))
+        store.applyCommitted(.init(itemId: "item-2", previousItemId: nil))
+
+        store.applyCompleted(.init(itemId: "item-1", contentIndex: 0, transcript: "First"))
+        store.applyCompleted(.init(itemId: "item-2", contentIndex: 0, transcript: "Second"))
+
+        XCTAssertEqual(store.displayText, "First\nSecond")
+    }
 }

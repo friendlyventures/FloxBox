@@ -4,15 +4,22 @@ import SwiftUI
 
 public struct ContentView: View {
     private let configuration: FloxBoxDistributionConfiguration
-    @State private var viewModel = TranscriptionViewModel()
+    @State private var viewModel: TranscriptionViewModel
     @State private var shortcutStore = ShortcutStore()
     @State private var shortcutCoordinator: ShortcutCoordinator?
+    @State private var permissionsCoordinator: PermissionsCoordinator?
+    @State private var permissionsPresenter: PermissionsPresenter
     @State private var updatesExpanded = false
     @State private var serverVADExpanded = false
     private let tuningColumns = [GridItem(.adaptive(minimum: 200), spacing: 12)]
 
     public init(configuration: FloxBoxDistributionConfiguration) {
         self.configuration = configuration
+        let presenter = PermissionsPresenter()
+        _permissionsPresenter = State(initialValue: presenter)
+        _viewModel = State(initialValue: TranscriptionViewModel(permissionsPresenter: {
+            presenter.present()
+        }))
     }
 
     public var body: some View {
@@ -230,28 +237,10 @@ public struct ContentView: View {
                 .frame(minWidth: 340, maxWidth: 380, maxHeight: .infinity)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
 
-                GeometryReader { proxy in
-                    let spacing: CGFloat = 16
-                    let availableHeight = max(0, proxy.size.height - spacing)
-                    let transcriptHeight = availableHeight * 0.67
-                    let promptHeight = availableHeight * 0.33
-
-                    VStack(alignment: .leading, spacing: spacing) {
-                        GroupBox("Transcript") {
-                            TextEditor(text: $viewModel.transcript)
-                                .font(.body)
-                                .frame(maxHeight: .infinity)
-                        }
-                        .frame(height: transcriptHeight)
-
-                        GroupBox("Transcription Prompt") {
-                            TextEditor(text: $viewModel.transcriptionPrompt)
-                                .font(.callout)
-                                .frame(maxHeight: .infinity)
-                        }
-                        .frame(height: promptHeight)
-                    }
-                    .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+                GroupBox("Transcription Prompt") {
+                    TextEditor(text: $viewModel.transcriptionPrompt)
+                        .font(.callout)
+                        .frame(maxHeight: .infinity)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -261,6 +250,31 @@ public struct ContentView: View {
         .onAppear {
             viewModel.refreshInputDevices()
             configuration.onAppear?()
+            if permissionsCoordinator == nil {
+                let permissionClient = AccessibilityPermissionClient()
+                let notificationClient = NotificationPermissionClient()
+                let permissionsViewModel = PermissionsViewModel(
+                    permissionClient: permissionClient,
+                    notificationClient: notificationClient,
+                )
+                let windowController = PermissionsWindowController(viewModel: permissionsViewModel)
+                let coordinator = PermissionsCoordinator(
+                    permissionChecker: {
+                        await permissionsViewModel.refresh()
+                        return permissionsViewModel.allGranted
+                    },
+                    requestAccess: {
+                        await permissionsViewModel.requestAllAccess()
+                    },
+                    window: windowController,
+                )
+                windowController.onClose = { [weak coordinator] in
+                    coordinator?.suppressAutoPresentation()
+                }
+                permissionsPresenter.coordinator = coordinator
+                permissionsCoordinator = coordinator
+                coordinator.start()
+            }
 
             if shortcutCoordinator == nil {
                 shortcutCoordinator = ShortcutCoordinator(
@@ -388,5 +402,14 @@ struct OptionalIntField: View {
             .onChange(of: text) { _, newValue in
                 value = Int(newValue)
             }
+    }
+}
+
+@MainActor
+private final class PermissionsPresenter {
+    var coordinator: PermissionsCoordinator?
+
+    func present() {
+        coordinator?.bringToFront()
     }
 }
