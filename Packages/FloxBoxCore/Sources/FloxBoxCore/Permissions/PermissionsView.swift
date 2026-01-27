@@ -67,7 +67,7 @@ public struct PermissionsView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Allow Accessibility")
                     .font(.headline)
-                Text("FloxBox needs Accessibility access to type into other apps.")
+                Text("Required. FloxBox needs Accessibility access to type into other apps.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 HStack(spacing: 12) {
@@ -85,9 +85,9 @@ public struct PermissionsView: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 12) {
-                Text("Enable Notifications")
+                Text("Enable Notifications (Optional)")
                     .font(.headline)
-                Text("FloxBox uses notifications for status and error messages.")
+                Text("Optional. Notifications show status and error messages.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 HStack(spacing: 12) {

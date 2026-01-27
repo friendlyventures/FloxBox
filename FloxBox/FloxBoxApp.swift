@@ -14,17 +14,21 @@ import SwiftUI
 @main
 @MainActor
 struct FloxBoxApp: App {
-    private let configuration: FloxBoxDistributionConfiguration
+    @State private var model: FloxBoxAppModel
 
     init() {
+        let configuration: FloxBoxDistributionConfiguration
         #if APP_STORE
             configuration = .appStore
         #else
             configuration = FloxBoxDirectServices.configuration()
         #endif
+        let model = FloxBoxAppModel(configuration: configuration)
+        model.start()
+        _model = State(initialValue: model)
     }
 
     var body: some Scene {
-        FloxBoxAppRoot.makeScene(configuration: configuration)
+        FloxBoxAppRoot.makeScene(model: model)
     }
 }

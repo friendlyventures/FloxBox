@@ -27,4 +27,29 @@ final class TranscriptionPermissionsTests: XCTestCase {
         XCTAssertEqual(toast.toastMessages.last, "Accessibility permission required")
         XCTAssertEqual(injector.startCount, 0)
     }
+
+    func testStartShowsPermissionsWindowWhenAccessibilityMissing() async {
+        let overlay = TestNotchOverlay()
+        let toast = TestToastPresenter()
+        let injector = TestDictationInjector()
+        var didPresent = false
+        let viewModel = TranscriptionViewModel(
+            keychain: InMemoryKeychainStore(),
+            audioCapture: TestAudioCapture(),
+            realtimeFactory: { _ in TestRealtimeClient() },
+            permissionRequester: { true },
+            notchOverlay: overlay,
+            toastPresenter: toast,
+            accessibilityChecker: { false },
+            secureInputChecker: { false },
+            permissionsPresenter: { didPresent = true },
+            dictationInjector: injector,
+            clipboardWriter: { _ in },
+        )
+        viewModel.apiKeyInput = "sk-test"
+
+        await viewModel.startAndWait()
+
+        XCTAssertTrue(didPresent)
+    }
 }
