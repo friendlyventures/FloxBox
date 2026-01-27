@@ -8,6 +8,7 @@ public enum RecordingStatus: Equatable {
     case idle
     case connecting
     case recording
+    case awaitingNetwork
     case error(String)
 
     public var label: String {
@@ -18,6 +19,8 @@ public enum RecordingStatus: Equatable {
             "Connecting"
         case .recording:
             "Recording"
+        case .awaitingNetwork:
+            "Awaiting Network"
         case .error:
             "Error"
         }
@@ -66,7 +69,8 @@ public protocol RestTranscriptionClientProtocol: AnyObject {
 
 @MainActor
 public protocol NotchRecordingControlling: AnyObject {
-    func show()
+    func showRecording()
+    func showAwaitingNetwork(onCancel: @escaping () -> Void)
     func hide()
 }
 
@@ -137,7 +141,11 @@ public final class TranscriptionViewModel {
     private var pendingRestWavURL: URL?
     private var realtimeFailedWhileRecording = false
     private var restRetryTask: Task<Void, Never>?
+    private var restTranscriptionTask: Task<Void, Never>?
+    private var completionTimeoutTask: Task<Void, Never>?
     private var restRetryDelayNanos: UInt64
+    private var realtimeCompletionTimeoutNanos: UInt64
+    private var restTimeoutNanos: UInt64
     private var isRestTranscribing = false
     private var pttTailNanos: UInt64
     private var didFinishInjection = false
@@ -152,6 +160,8 @@ public final class TranscriptionViewModel {
         notchOverlay: (any NotchRecordingControlling)? = nil,
         toastPresenter: (any ToastPresenting)? = nil,
         restRetryDelayNanos: UInt64 = 2_000_000_000,
+        realtimeCompletionTimeoutNanos: UInt64 = 5_000_000_000,
+        restTimeoutNanos: UInt64 = 5_000_000_000,
         pttTailNanos: UInt64 = 200_000_000,
         accessibilityChecker: @escaping () -> Bool = { AccessibilityPermissionClient().isTrusted() },
         secureInputChecker: @escaping () -> Bool = { IsSecureEventInputEnabled() },
@@ -176,6 +186,8 @@ public final class TranscriptionViewModel {
         self.notchOverlay = notchOverlay ?? NotchRecordingController()
         self.toastPresenter = toastPresenter ?? SystemNotificationPresenter()
         self.restRetryDelayNanos = restRetryDelayNanos
+        self.realtimeCompletionTimeoutNanos = realtimeCompletionTimeoutNanos
+        self.restTimeoutNanos = restTimeoutNanos
         self.pttTailNanos = pttTailNanos
         do {
             apiKeyInput = try keychain.load() ?? ""
@@ -241,7 +253,7 @@ public final class TranscriptionViewModel {
     }
 
     private func startInternal() async {
-        guard status != .recording else { return }
+        guard status != .recording, status != .awaitingNetwork else { return }
         let sessionID = String(UUID().uuidString.prefix(8))
         recordingSessionID = sessionID
         resetRecordingState(sessionID: sessionID)
@@ -254,7 +266,7 @@ public final class TranscriptionViewModel {
 
         status = .recording
         DebugLog.recording(logStatusChange("status.recording", sessionID: sessionID))
-        notchOverlay.show()
+        notchOverlay.showRecording()
 
         let config = TranscriptionSessionConfiguration(
             model: model,
@@ -293,6 +305,10 @@ public final class TranscriptionViewModel {
         realtimeFailedWhileRecording = false
         restRetryTask?.cancel()
         restRetryTask = nil
+        restTranscriptionTask?.cancel()
+        restTranscriptionTask = nil
+        completionTimeoutTask?.cancel()
+        completionTimeoutTask = nil
         isRestTranscribing = false
         pendingRestWavURL = nil
         didFinishInjection = false
@@ -437,24 +453,83 @@ public final class TranscriptionViewModel {
         ].joined(separator: " ")
         DebugLog.recording(stopLog)
 
-        notchOverlay.hide()
         commitTask?.cancel()
         commitTask = nil
-        if status == .recording, pttTailNanos > 0 {
-            try? await Task.sleep(nanoseconds: pttTailNanos)
-            let tailLog = [
-                "ptt.tail.complete",
-                "session=\(sessionID)",
-                "tailNanos=\(pttTailNanos)",
-                "uptime=\(ProcessInfo.processInfo.systemUptime)",
-            ].joined(separator: " ")
-            DebugLog.recording(tailLog)
-        }
+        await applyPttTailIfNeeded(sessionID: sessionID)
         audioCapture.stop()
         await Task.yield()
         finalizeWavCapture()
         let firstSendQueued = firstSendUptime.map { String(describing: $0) } ?? "nil"
         let firstSendActual = firstSendActualUptime.map { String(describing: $0) } ?? "nil"
+        logAudioSummary(
+            sessionID: sessionID,
+            firstSendQueued: firstSendQueued,
+            firstSendActual: firstSendActual,
+        )
+
+        let shouldAwaitCompletion = waitForCompletion
+
+        if !realtimeFailedWhileRecording, !isRealtimeReady, let sessionUpdateTask {
+            do {
+                try await sessionUpdateTask.value
+                markRealtimeReady(startCommitTimer: false)
+            } catch {
+                realtimeFailedWhileRecording = true
+                errorMessage = error.localizedDescription
+                closeRealtime()
+            }
+        }
+
+        if realtimeFailedWhileRecording {
+            closeRealtime()
+            beginAwaitingNetwork()
+            if !startRestFallbackIfNeeded() {
+                endAwaitingNetwork()
+                finalizeDictationInjectionIfNeeded()
+            }
+            return
+        }
+
+        if hasBufferedAudio {
+            if shouldAwaitCompletion {
+                shouldCloseAfterCompletion = true
+            }
+            if let audioSendTask {
+                _ = await audioSendTask.value
+            }
+            try? await client?.commitAudio()
+            if !shouldAwaitCompletion {
+                closeRealtime()
+                status = .idle
+                finalizeDictationInjectionIfNeeded()
+                notchOverlay.hide()
+                return
+            }
+            beginAwaitingNetwork()
+            startRealtimeCompletionTimeout()
+            return
+        } else {
+            closeRealtime()
+            status = .idle
+            finalizeDictationInjectionIfNeeded()
+            notchOverlay.hide()
+            return
+        }
+    }
+
+    private func applyPttTailIfNeeded(sessionID: String) async {
+        guard status == .recording, pttTailNanos > 0 else { return }
+        try? await Task.sleep(nanoseconds: pttTailNanos)
+        let tailLog = [
+            "ptt.tail.complete",
+            "session=\(sessionID)",
+            "tailNanos=\(pttTailNanos)",
+            "uptime=\(ProcessInfo.processInfo.systemUptime)",
+        ].joined(separator: " ")
+        DebugLog.recording(tailLog)
+    }
+
+    private func logAudioSummary(sessionID: String, firstSendQueued: String, firstSendActual: String) {
         let baseSummary = [
             "audio.summary",
             "session=\(sessionID)",
@@ -477,49 +552,59 @@ public final class TranscriptionViewModel {
             ]
             DebugLog.recording(summary.joined(separator: " "))
         }
+    }
 
-        let shouldAwaitCompletion = waitForCompletion
-
-        if !realtimeFailedWhileRecording, !isRealtimeReady, let sessionUpdateTask {
-            do {
-                try await sessionUpdateTask.value
-                markRealtimeReady(startCommitTimer: false)
-            } catch {
-                realtimeFailedWhileRecording = true
-                errorMessage = error.localizedDescription
-                closeRealtime()
+    private func beginAwaitingNetwork() {
+        guard status != .awaitingNetwork else { return }
+        status = .awaitingNetwork
+        notchOverlay.showAwaitingNetwork { [weak self] in
+            Task { @MainActor in
+                self?.cancelPendingNetwork()
             }
         }
+    }
 
-        if realtimeFailedWhileRecording {
-            closeRealtime()
-            await startRestFallbackIfNeeded()
-            status = .idle
-            finalizeDictationInjectionIfNeeded()
-            return
-        }
-
-        if hasBufferedAudio {
-            if shouldAwaitCompletion {
-                shouldCloseAfterCompletion = true
-            }
-            if let audioSendTask {
-                _ = await audioSendTask.value
-            }
-            try? await client?.commitAudio()
-            if !shouldAwaitCompletion {
-                closeRealtime()
-                status = .idle
-                finalizeDictationInjectionIfNeeded()
-                return
-            }
-        } else {
-            closeRealtime()
-            status = .idle
-            finalizeDictationInjectionIfNeeded()
-            return
-        }
+    private func endAwaitingNetwork() {
+        completionTimeoutTask?.cancel()
+        completionTimeoutTask = nil
+        restRetryTask?.cancel()
+        restRetryTask = nil
+        restTranscriptionTask?.cancel()
+        restTranscriptionTask = nil
         status = .idle
+        notchOverlay.hide()
+    }
+
+    private func cancelPendingNetwork() {
+        completionTimeoutTask?.cancel()
+        completionTimeoutTask = nil
+        restRetryTask?.cancel()
+        restRetryTask = nil
+        restTranscriptionTask?.cancel()
+        restTranscriptionTask = nil
+        isRestTranscribing = false
+        if let pendingRestWavURL {
+            try? FileManager.default.removeItem(at: pendingRestWavURL)
+        }
+        pendingRestWavURL = nil
+        latestWavURL = nil
+        closeRealtime()
+        endAwaitingNetwork()
+        finalizeDictationInjectionIfNeeded()
+    }
+
+    private func startRealtimeCompletionTimeout() {
+        completionTimeoutTask?.cancel()
+        completionTimeoutTask = Task { [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(nanoseconds: realtimeCompletionTimeoutNanos)
+            guard !Task.isCancelled, status == .awaitingNetwork else { return }
+            closeRealtime()
+            if !startRestFallbackIfNeeded() {
+                endAwaitingNetwork()
+                finalizeDictationInjectionIfNeeded()
+            }
+        }
     }
 
     private func startCommitTimerIfNeeded(vadMode: VADMode) {
@@ -573,12 +658,18 @@ public final class TranscriptionViewModel {
         }
     }
 
-    private func startRestFallbackIfNeeded() async {
-        guard let wavURL = pendingRestWavURL else { return }
-        await performRestTranscription(wavURL: wavURL, allowRetry: true)
+    @discardableResult
+    private func startRestFallbackIfNeeded() -> Bool {
+        guard let wavURL = pendingRestWavURL else { return false }
+        restTranscriptionTask?.cancel()
+        restTranscriptionTask = Task { @MainActor [weak self] in
+            await self?.performRestTranscription(wavURL: wavURL, allowRetry: true)
+        }
+        return true
     }
 
     private func performRestTranscription(wavURL: URL, allowRetry: Bool) async {
+        guard !Task.isCancelled else { return }
         guard !isRestTranscribing else { return }
         guard let restClient = restClientForSession() else { return }
 
@@ -586,24 +677,30 @@ public final class TranscriptionViewModel {
         defer { isRestTranscribing = false }
 
         do {
-            let text = try await restClient.transcribe(
-                fileURL: wavURL,
-                model: model.rawValue,
-                language: language.code,
-                prompt: normalizedPrompt,
-            )
+            let text = try await withTimeout(nanos: restTimeoutNanos) { [self] in
+                try await restClient.transcribe(
+                    fileURL: wavURL,
+                    model: model.rawValue,
+                    language: language.code,
+                    prompt: normalizedPrompt,
+                )
+            }
             applyRestTranscription(text)
+            endAwaitingNetwork()
+            finalizeDictationInjectionIfNeeded()
         } catch {
+            guard !Task.isCancelled else { return }
             if allowRetry {
-                toastPresenter.showToast("Retrying...")
                 restRetryTask?.cancel()
-                restRetryTask = Task { [weak self] in
+                restRetryTask = Task { @MainActor [weak self] in
                     guard let self else { return }
                     try? await Task.sleep(nanoseconds: restRetryDelayNanos)
                     await performRestTranscription(wavURL: wavURL, allowRetry: false)
                 }
             } else {
-                showManualRetryAction(for: wavURL)
+                toastPresenter.showToast("Dictation failed — check your network")
+                endAwaitingNetwork()
+                finalizeDictationInjectionIfNeeded()
             }
         }
     }
@@ -614,6 +711,28 @@ public final class TranscriptionViewModel {
         }
         guard let activeAPIKey else { return nil }
         return RestTranscriptionClient(apiKey: activeAPIKey)
+    }
+
+    private struct TimeoutError: Error {}
+
+    private func withTimeout<T>(
+        nanos: UInt64,
+        operation: @escaping () async throws -> T,
+    ) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                try await operation()
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: nanos)
+                throw TimeoutError()
+            }
+            guard let result = try await group.next() else {
+                throw TimeoutError()
+            }
+            group.cancelAll()
+            return result
+        }
     }
 
     private func applyRestTranscription(_ text: String) {
@@ -627,16 +746,6 @@ public final class TranscriptionViewModel {
         restRetryTask?.cancel()
         restRetryTask = nil
         toastPresenter.clearToast()
-    }
-
-    private func showManualRetryAction(for wavURL: URL) {
-        toastPresenter.showToast("Transcription failed")
-        toastPresenter.showAction(title: "Retry") { [weak self] in
-            Task { @MainActor in
-                self?.toastPresenter.showToast("Retrying...")
-                await self?.performRestTranscription(wavURL: wavURL, allowRetry: false)
-            }
-        }
     }
 
     private func enqueueAudioSend(_ data: Data) {
@@ -754,6 +863,8 @@ public final class TranscriptionViewModel {
         pendingAudio.removeAll()
         shouldCloseAfterCompletion = false
         awaitingCompletionItemId = nil
+        completionTimeoutTask?.cancel()
+        completionTimeoutTask = nil
     }
 
     private func finalizeDictationInjectionIfNeeded() {
@@ -771,6 +882,7 @@ public final class TranscriptionViewModel {
         var shouldFinalize = false
         var shouldCloseRealtime = false
         var shouldStartRestFallback = false
+        var shouldEndAwaitingNetwork = false
     }
 
     private func applyPostActions(_ actions: PostApplyActions) async {
@@ -778,10 +890,17 @@ public final class TranscriptionViewModel {
             closeRealtime()
         }
         if actions.shouldStartRestFallback {
-            await startRestFallbackIfNeeded()
+            beginAwaitingNetwork()
+            if !startRestFallbackIfNeeded() {
+                finalizeDictationInjectionIfNeeded()
+                endAwaitingNetwork()
+            }
         }
         if actions.shouldFinalize {
             finalizeDictationInjectionIfNeeded()
+        }
+        if actions.shouldEndAwaitingNetwork {
+            endAwaitingNetwork()
         }
     }
 
@@ -809,6 +928,7 @@ public final class TranscriptionViewModel {
         var actions = PostApplyActions()
         actions.shouldCloseRealtime = true
         actions.shouldFinalize = true
+        actions.shouldEndAwaitingNetwork = true
         return actions
     }
 
@@ -819,7 +939,6 @@ public final class TranscriptionViewModel {
             var actions = PostApplyActions()
             actions.shouldCloseRealtime = true
             actions.shouldStartRestFallback = true
-            actions.shouldFinalize = true
             return actions
         }
         if status != .recording, status != .connecting {

@@ -243,6 +243,9 @@ public struct DebugPanelView: View {
         if case .error = status {
             return .red
         }
+        if case .awaitingNetwork = status {
+            return .orange
+        }
         return .secondary
     }
 

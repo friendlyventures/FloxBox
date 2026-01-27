@@ -29,7 +29,6 @@ public final class EventTapShortcutBackend: ShortcutBackend {
     private let listenEventAccessChecker: ListenEventAccessChecker
     private let listenEventAccessRequester: ListenEventAccessRequester
     private var retryTimer: RetryTimer?
-    private var hasRequestedListenEventAccess = false
 
     private var captureCompletion: ((ShortcutDefinition?) -> Void)?
     private var captureId: ShortcutID?
@@ -73,10 +72,6 @@ public final class EventTapShortcutBackend: ShortcutBackend {
         guard eventTap == nil else { return }
 
         if !listenEventAccessChecker() {
-            if !hasRequestedListenEventAccess {
-                _ = listenEventAccessRequester()
-                hasRequestedListenEventAccess = true
-            }
             onStatusChange?("Enable Input Monitoring for FloxBox in System Settings")
             ShortcutDebugLogger.log("backend.missingInputMonitoring")
             scheduleRetry()
@@ -112,7 +107,6 @@ public final class EventTapShortcutBackend: ShortcutBackend {
         }
         CGEvent.tapEnable(tap: eventTap, enable: true)
         clearRetryTimer()
-        hasRequestedListenEventAccess = false
         onStatusChange?(nil)
         ShortcutDebugLogger.log("backend.tapEnabled")
     }

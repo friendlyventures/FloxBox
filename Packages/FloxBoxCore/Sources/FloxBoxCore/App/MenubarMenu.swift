@@ -20,7 +20,7 @@ public struct MenubarMenu: View {
             openWindow(id: "settings")
         }
 
-        if !permissionsViewModel.isTrusted {
+        if !permissionsViewModel.allGranted {
             Divider()
             Button("Permissions") {
                 model.presentPermissions()

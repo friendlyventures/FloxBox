@@ -106,6 +106,120 @@ final class TranscriptionViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.transcript, "Rest OK")
     }
 
+    func testRealtimeCompletionTimeoutFallsBackToRest() async {
+        let realtime = TestRealtimeClient()
+        let audio = TestAudioCapture()
+        let rest = TestRestClient()
+        rest.queueResults([.success("Rest OK")])
+        let overlay = TestNotchOverlay()
+
+        let viewModel = TranscriptionViewModel(
+            keychain: InMemoryKeychainStore(),
+            audioCapture: audio,
+            realtimeFactory: { _ in realtime },
+            restClient: rest,
+            permissionRequester: { true },
+            notchOverlay: overlay,
+            realtimeCompletionTimeoutNanos: 1_000_000,
+            restTimeoutNanos: 1_000_000,
+            pttTailNanos: 0,
+            accessibilityChecker: { true },
+            secureInputChecker: { false },
+            permissionsPresenter: {},
+            dictationInjector: TestDictationInjector(),
+            clipboardWriter: { _ in },
+        )
+
+        viewModel.apiKeyInput = "sk-test"
+        await viewModel.startAndWait()
+        audio.emit(Data([0x01]))
+        await Task.yield()
+
+        await viewModel.stopAndWait()
+        try? await Task.sleep(nanoseconds: 5_000_000)
+
+        XCTAssertEqual(rest.callCount, 1)
+        XCTAssertEqual(viewModel.transcript, "Rest OK")
+        XCTAssertEqual(viewModel.status, .idle)
+        XCTAssertEqual(overlay.hideCount, 1)
+    }
+
+    func testFinalRestFailureNotifiesAndReturnsIdle() async {
+        let realtime = TestRealtimeClient()
+        let audio = TestAudioCapture()
+        let rest = TestRestClient()
+        rest.queueResults([.failure(TestRestError.failure), .failure(TestRestError.failure)])
+        let toast = TestToastPresenter()
+
+        let viewModel = TranscriptionViewModel(
+            keychain: InMemoryKeychainStore(),
+            audioCapture: audio,
+            realtimeFactory: { _ in realtime },
+            restClient: rest,
+            permissionRequester: { true },
+            notchOverlay: TestNotchOverlay(),
+            toastPresenter: toast,
+            restRetryDelayNanos: 1_000_000,
+            restTimeoutNanos: 1_000_000,
+            pttTailNanos: 0,
+            accessibilityChecker: { true },
+            secureInputChecker: { false },
+            permissionsPresenter: {},
+            dictationInjector: TestDictationInjector(),
+            clipboardWriter: { _ in },
+        )
+
+        viewModel.apiKeyInput = "sk-test"
+        await viewModel.startAndWait()
+        audio.emit(Data([0x01]))
+        await Task.yield()
+
+        realtime.emit(.error("socket failed"))
+        await viewModel.stopAndWait()
+        try? await Task.sleep(nanoseconds: 5_000_000)
+
+        XCTAssertEqual(rest.callCount, 2)
+        XCTAssertEqual(toast.toastMessages.last, "Dictation failed — check your network")
+        XCTAssertTrue(toast.actionTitles.isEmpty)
+        XCTAssertEqual(viewModel.status, .idle)
+    }
+
+    func testCancelStopsPendingNetworkAndReturnsIdle() async {
+        let realtime = TestRealtimeClient()
+        let audio = TestAudioCapture()
+        let rest = TestRestClient()
+        let overlay = TestNotchOverlay()
+
+        let viewModel = TranscriptionViewModel(
+            keychain: InMemoryKeychainStore(),
+            audioCapture: audio,
+            realtimeFactory: { _ in realtime },
+            restClient: rest,
+            permissionRequester: { true },
+            notchOverlay: overlay,
+            realtimeCompletionTimeoutNanos: 5_000_000_000,
+            restTimeoutNanos: 5_000_000_000,
+            pttTailNanos: 0,
+            accessibilityChecker: { true },
+            secureInputChecker: { false },
+            permissionsPresenter: {},
+            dictationInjector: TestDictationInjector(),
+            clipboardWriter: { _ in },
+        )
+
+        viewModel.apiKeyInput = "sk-test"
+        await viewModel.startAndWait()
+        audio.emit(Data([0x01]))
+        await Task.yield()
+        await viewModel.stopAndWait()
+
+        overlay.triggerCancel()
+        try? await Task.sleep(nanoseconds: 1_000_000)
+
+        XCTAssertEqual(viewModel.status, .idle)
+        XCTAssertEqual(overlay.hideCount, 1)
+    }
+
     func testStartResetsTranscriptBetweenSessions() async {
         var clients: [TestRealtimeClient] = []
         let audio = TestAudioCapture()

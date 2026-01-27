@@ -176,14 +176,25 @@ final class TestRestClient: RestTranscriptionClientProtocol {
 @MainActor
 final class TestNotchOverlay: NotchRecordingControlling {
     private(set) var showCount = 0
+    private(set) var showAwaitingNetworkCount = 0
     private(set) var hideCount = 0
+    private var cancelHandler: (() -> Void)?
 
-    func show() {
+    func showRecording() {
         showCount += 1
+    }
+
+    func showAwaitingNetwork(onCancel: @escaping () -> Void) {
+        showAwaitingNetworkCount += 1
+        cancelHandler = onCancel
     }
 
     func hide() {
         hideCount += 1
+    }
+
+    func triggerCancel() {
+        cancelHandler?()
     }
 }
 

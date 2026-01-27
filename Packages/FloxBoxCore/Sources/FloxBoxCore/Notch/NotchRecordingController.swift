@@ -14,6 +14,7 @@ final class NotchRecordingController {
     private var window: NotchRecordingWindow?
     private var screenObserver: NSObjectProtocol?
     private var hideTask: Task<Void, Never>?
+    private var spinnerTask: Task<Void, Never>?
 
     init() {
         screenObserver = NotificationCenter.default.addObserver(
@@ -33,26 +34,64 @@ final class NotchRecordingController {
         }
     }
 
-    func show() {
+    func showRecording() {
         hideTask?.cancel()
         hideTask = nil
+        spinnerTask?.cancel()
+        spinnerTask = nil
 
         ensureWindow()
         window?.orderFrontRegardless()
+        window?.setAllowsMouseEvents(false)
+        state.isAwaitingNetwork = false
+        state.showNetworkSpinner = false
+        state.onCancel = nil
         state.isRecording = true
         withAnimation(.interpolatingSpring(stiffness: 260, damping: 18)) {
             state.isExpanded = true
         }
     }
 
+    func showAwaitingNetwork(onCancel: @escaping () -> Void) {
+        hideTask?.cancel()
+        hideTask = nil
+        spinnerTask?.cancel()
+        spinnerTask = nil
+
+        ensureWindow()
+        window?.orderFrontRegardless()
+        window?.setAllowsMouseEvents(true)
+        state.isRecording = false
+        state.isAwaitingNetwork = true
+        state.showNetworkSpinner = false
+        state.onCancel = onCancel
+        withAnimation(.interpolatingSpring(stiffness: 260, damping: 18)) {
+            state.isExpanded = true
+        }
+
+        spinnerTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            await MainActor.run {
+                guard let self, self.state.isAwaitingNetwork else { return }
+                self.state.showNetworkSpinner = true
+            }
+        }
+    }
+
     func hide() {
         hideTask?.cancel()
+        spinnerTask?.cancel()
+        spinnerTask = nil
         state.isRecording = false
+        state.isAwaitingNetwork = false
+        state.showNetworkSpinner = false
+        state.onCancel = nil
         withAnimation(.easeInOut(duration: 0.18)) {
             state.isExpanded = false
         }
 
         guard let window else { return }
+        window.setAllowsMouseEvents(false)
         hideTask = Task { [weak window] in
             try? await Task.sleep(nanoseconds: Constants.closeDelayNanos)
             window?.orderOut(nil)

@@ -34,4 +34,8 @@ final class NotchRecordingWindow: NSPanel {
     override var canBecomeKey: Bool { false }
 
     override var canBecomeMain: Bool { false }
+
+    func setAllowsMouseEvents(_ allowsMouseEvents: Bool) {
+        ignoresMouseEvents = !allowsMouseEvents
+    }
 }

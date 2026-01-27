@@ -3,27 +3,9 @@ import XCTest
 
 @MainActor
 final class EventTapShortcutBackendTests: XCTestCase {
-    func testStartRequestsListenEventAccessWhenMissing() {
-        var accessChecks = 0
+    func testStartDoesNotRequestListenEventAccessWhenMissing() {
         var requestCount = 0
-        var tapAttempts = 0
         var lastStatusMessage: String?
-        var capturedTimer: TestRetryTimer?
-
-        let listenChecker: EventTapShortcutBackend.ListenEventAccessChecker = {
-            accessChecks += 1
-            return accessChecks > 1
-        }
-
-        let listenRequester: EventTapShortcutBackend.ListenEventAccessRequester = {
-            requestCount += 1
-            return false
-        }
-
-        let tapFactory: EventTapShortcutBackend.TapFactory = { _, _, _ in
-            tapAttempts += 1
-            return Self.makeMachPort()
-        }
 
         let runLoopSourceFactory: EventTapShortcutBackend.RunLoopSourceFactory = { _ in
             var context = CFRunLoopSourceContext(
@@ -41,34 +23,20 @@ final class EventTapShortcutBackendTests: XCTestCase {
             return CFRunLoopSourceCreate(kCFAllocatorDefault, 0, &context)
         }
 
-        let timerFactory: EventTapShortcutBackend.RetryTimerFactory = { _, handler in
-            let timer = TestRetryTimer(handler: handler)
-            capturedTimer = timer
-            return timer
-        }
-
         let backend = EventTapShortcutBackend(
-            tapFactory: tapFactory,
+            tapFactory: { _, _, _ in nil },
             runLoop: CFRunLoopGetCurrent(),
             runLoopSourceFactory: runLoopSourceFactory,
-            retryTimerFactory: timerFactory,
-            listenEventAccessChecker: listenChecker,
-            listenEventAccessRequester: listenRequester,
+            retryTimerFactory: { _, _ in TestRetryTimer(handler: {}) },
+            listenEventAccessChecker: { false },
+            listenEventAccessRequester: { requestCount += 1; return false },
         )
         backend.onStatusChange = { lastStatusMessage = $0 }
 
         backend.start()
 
-        XCTAssertEqual(requestCount, 1)
-        XCTAssertEqual(tapAttempts, 0)
+        XCTAssertEqual(requestCount, 0)
         XCTAssertEqual(lastStatusMessage, "Enable Input Monitoring for FloxBox in System Settings")
-        XCTAssertNotNil(capturedTimer)
-
-        capturedTimer?.fire()
-
-        XCTAssertEqual(requestCount, 1)
-        XCTAssertEqual(tapAttempts, 1)
-        XCTAssertEqual(lastStatusMessage, nil)
     }
 
     func testStartRetriesUntilTapCreated() {

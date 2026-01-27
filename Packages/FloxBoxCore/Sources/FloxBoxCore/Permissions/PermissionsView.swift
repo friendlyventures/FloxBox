@@ -1,56 +1,88 @@
 import SwiftUI
-import UserNotifications
 
 @MainActor
 public final class PermissionsViewModel: ObservableObject {
-    @Published public var isTrusted: Bool
-    @Published public var notificationStatus: UNAuthorizationStatus
-    private let permissionClient: AccessibilityPermissionClient
-    private let notificationClient: NotificationPermissionClient
+    @Published public var inputMonitoringGranted: Bool
+    @Published public var accessibilityGranted: Bool
+    @Published public var microphoneGranted: Bool
+    private let inputMonitoringClient: InputMonitoringPermissionClient
+    private let accessibilityClient: AccessibilityPermissionClient
+    private let microphoneClient: MicrophonePermissionClient
+    private let settingsOpener: SystemSettingsOpener
 
     public init(
+        inputMonitoringClient: InputMonitoringPermissionClient,
+        accessibilityClient: AccessibilityPermissionClient,
+        microphoneClient: MicrophonePermissionClient,
+        settingsOpener: SystemSettingsOpener,
+    ) {
+        self.inputMonitoringClient = inputMonitoringClient
+        self.accessibilityClient = accessibilityClient
+        self.microphoneClient = microphoneClient
+        self.settingsOpener = settingsOpener
+        inputMonitoringGranted = inputMonitoringClient.isGranted()
+        accessibilityGranted = accessibilityClient.isTrusted()
+        microphoneGranted = microphoneClient.authorizationStatus() == .authorized
+    }
+
+    public convenience init(
         permissionClient: AccessibilityPermissionClient,
         notificationClient: NotificationPermissionClient,
     ) {
-        self.permissionClient = permissionClient
-        self.notificationClient = notificationClient
-        isTrusted = permissionClient.isTrusted()
-        notificationStatus = .notDetermined
+        self.init(
+            inputMonitoringClient: InputMonitoringPermissionClient(),
+            accessibilityClient: permissionClient,
+            microphoneClient: MicrophonePermissionClient(),
+            settingsOpener: SystemSettingsOpener(),
+        )
+        _ = notificationClient
+    }
+
+    public var isTrusted: Bool {
+        accessibilityGranted
     }
 
     public var notificationsGranted: Bool {
-        switch notificationStatus {
-        case .authorized, .provisional, .ephemeral:
-            true
-        case .denied, .notDetermined:
-            false
-        @unknown default:
-            false
-        }
+        microphoneGranted
     }
 
     public var allGranted: Bool {
-        isTrusted && notificationsGranted
+        inputMonitoringGranted && accessibilityGranted && microphoneGranted
     }
 
     public func refresh() async {
-        isTrusted = permissionClient.isTrusted()
-        notificationStatus = await notificationClient.fetchStatus()
+        inputMonitoringGranted = inputMonitoringClient.isGranted()
+        accessibilityGranted = accessibilityClient.isTrusted()
+        microphoneGranted = microphoneClient.authorizationStatus() == .authorized
+    }
+
+    public func requestInputMonitoringAccess() async {
+        _ = inputMonitoringClient.requestAccess()
+        settingsOpener.open()
+        await refresh()
     }
 
     public func requestAccessibilityAccess() async {
-        permissionClient.requestAccess()
+        accessibilityClient.requestAccess()
+        settingsOpener.open()
         await refresh()
     }
 
     public func requestNotificationAccess() async {
-        _ = await notificationClient.requestAuthorization()
+        await requestMicrophoneAccess()
+    }
+
+    public func requestMicrophoneAccess() async {
+        _ = await microphoneClient.requestAccess()
+        settingsOpener.open()
         await refresh()
     }
 
     public func requestAllAccess() async {
-        permissionClient.requestAccess()
-        _ = await notificationClient.requestAuthorization()
+        _ = inputMonitoringClient.requestAccess()
+        accessibilityClient.requestAccess()
+        _ = await microphoneClient.requestAccess()
+        settingsOpener.open()
         await refresh()
     }
 }
@@ -64,47 +96,55 @@ public struct PermissionsView: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Allow Accessibility")
-                    .font(.headline)
-                Text("Required. FloxBox needs Accessibility access to type into other apps.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                HStack(spacing: 12) {
-                    Button("Request Access") {
-                        Task { await viewModel.requestAccessibilityAccess() }
-                    }
-                    if viewModel.isTrusted {
-                        Text("Granted").foregroundStyle(.green)
-                    } else {
-                        Text("Missing").foregroundStyle(.red)
-                    }
-                }
-            }
+            permissionRow(
+                title: "Input Monitoring",
+                description: "Needed for push-to-talk hotkey detection.",
+                granted: viewModel.inputMonitoringGranted,
+                action: { Task { await viewModel.requestInputMonitoringAccess() } },
+            )
 
             Divider()
 
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Enable Notifications (Optional)")
-                    .font(.headline)
-                Text("Optional. Notifications show status and error messages.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                HStack(spacing: 12) {
-                    Button("Request Access") {
-                        Task { await viewModel.requestNotificationAccess() }
-                    }
-                    if viewModel.notificationsGranted {
-                        Text("Granted").foregroundStyle(.green)
-                    } else {
-                        Text("Missing").foregroundStyle(.red)
-                    }
-                }
-            }
+            permissionRow(
+                title: "Accessibility",
+                description: "Needed to type into other apps.",
+                granted: viewModel.accessibilityGranted,
+                action: { Task { await viewModel.requestAccessibilityAccess() } },
+            )
+
+            Divider()
+
+            permissionRow(
+                title: "Microphone",
+                description: "Needed to capture dictation audio.",
+                granted: viewModel.microphoneGranted,
+                action: { Task { await viewModel.requestMicrophoneAccess() } },
+            )
 
             Spacer()
         }
         .padding(20)
-        .frame(minWidth: 440, minHeight: 300)
+        .frame(minWidth: 460, minHeight: 360)
+    }
+
+    @ViewBuilder
+    private func permissionRow(
+        title: String,
+        description: String,
+        granted: Bool,
+        action: @escaping () -> Void,
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.headline)
+            Text(description)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            HStack(spacing: 12) {
+                Button("Request Access", action: action)
+                Text(granted ? "Granted" : "Not Granted")
+                    .foregroundStyle(granted ? .green : .red)
+            }
+        }
     }
 }

@@ -3,7 +3,10 @@ import SwiftUI
 final class NotchRecordingState: ObservableObject {
     @Published var isRecording = false
     @Published var isExpanded = false
+    @Published var isAwaitingNetwork = false
+    @Published var showNetworkSpinner = false
     @Published var layout = NotchRecordingLayout.placeholder
+    var onCancel: (() -> Void)?
 }
 
 struct NotchRecordingLayout: Equatable {
@@ -52,6 +55,13 @@ struct NotchRecordingView: View {
                     .animation(.easeInOut(duration: 0.12), value: state.isExpanded)
                 }
             }
+            .overlay(alignment: .trailing) {
+                if state.isAwaitingNetwork, state.showNetworkSpinner {
+                    NetworkIndicatorView(onCancel: { state.onCancel?() })
+                        .frame(maxHeight: .infinity)
+                        .padding(.trailing, 12)
+                }
+            }
             .animation(.interpolatingSpring(stiffness: 260, damping: 18), value: state.isExpanded)
         }
         .frame(width: state.layout.containerWidth, height: state.layout.height, alignment: .top)
@@ -90,5 +100,27 @@ struct RightIcon: View {
                 Capsule()
                     .fill(Color.white.opacity(0.12)),
             )
+    }
+}
+
+private struct NetworkIndicatorView: View {
+    let onCancel: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: onCancel) {
+            if isHovering {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.85))
+            } else {
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .tint(.white.opacity(0.85))
+            }
+        }
+        .buttonStyle(.plain)
+        .frame(width: 16, height: 16)
+        .onHover { isHovering = $0 }
     }
 }

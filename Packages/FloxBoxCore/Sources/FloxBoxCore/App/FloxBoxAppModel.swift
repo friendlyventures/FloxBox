@@ -41,11 +41,15 @@ public final class FloxBoxAppModel {
             resolvedPresenter.present()
         })
 
-        let permissionClient = AccessibilityPermissionClient()
-        let notificationClient = NotificationPermissionClient()
+        let inputMonitoringClient = InputMonitoringPermissionClient()
+        let accessibilityClient = AccessibilityPermissionClient()
+        let microphoneClient = MicrophonePermissionClient()
+        let settingsOpener = SystemSettingsOpener()
         let permissionsViewModel = PermissionsViewModel(
-            permissionClient: permissionClient,
-            notificationClient: notificationClient,
+            inputMonitoringClient: inputMonitoringClient,
+            accessibilityClient: accessibilityClient,
+            microphoneClient: microphoneClient,
+            settingsOpener: settingsOpener,
         )
         let permissionsWindow = PermissionsWindowController(viewModel: permissionsViewModel)
 
