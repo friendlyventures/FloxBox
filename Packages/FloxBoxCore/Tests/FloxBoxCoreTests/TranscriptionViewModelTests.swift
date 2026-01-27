@@ -58,7 +58,10 @@ final class TranscriptionViewModelTests: XCTestCase {
         viewModel.apiKeyInput = "sk-test"
         await viewModel.startAndWait()
         audio.emit(Data([0x01, 0x02]))
-        await Task.yield()
+        for _ in 0 ..< 10 where realtime.sentAudio.isEmpty {
+            try? await Task.sleep(nanoseconds: 1_000_000)
+        }
+        XCTAssertFalse(realtime.sentAudio.isEmpty)
 
         await viewModel.stopAndWait()
         XCTAssertFalse(realtime.didClose)
@@ -69,6 +72,79 @@ final class TranscriptionViewModelTests: XCTestCase {
 
         XCTAssertTrue(realtime.didClose)
         XCTAssertEqual(viewModel.transcript, "Test")
+    }
+
+    func testWireAudioHistoryCreatesChunkOnCommit() async throws {
+        let realtime = TestRealtimeClient()
+        let audio = TestAudioCapture()
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: base) }
+        let store = DictationAudioHistoryStore(baseURL: base)
+
+        let viewModel = TranscriptionViewModel(
+            keychain: InMemoryKeychainStore(),
+            audioCapture: audio,
+            realtimeFactory: { _ in realtime },
+            restClient: TestRestClient(),
+            permissionRequester: { true },
+            notchOverlay: TestNotchOverlay(),
+            pttTailNanos: 0,
+            accessibilityChecker: { true },
+            secureInputChecker: { false },
+            permissionsPresenter: {},
+            dictationInjector: TestDictationInjector(),
+            clipboardWriter: { _ in },
+            audioHistoryStore: store,
+        )
+
+        viewModel.apiKeyInput = "sk-test"
+        await viewModel.startAndWait()
+        audio.emit(Data([0x01, 0x02]))
+        await Task.yield()
+
+        realtime.emit(.inputAudioCommitted(.init(itemId: "item-1", previousItemId: nil)))
+        realtime.emit(.transcriptionCompleted(.init(itemId: "item-1", contentIndex: 0, transcript: "Hello")))
+        try? await Task.sleep(nanoseconds: 5_000_000)
+
+        let sessions = viewModel.dictationAudioHistorySessions
+        XCTAssertEqual(sessions.count, 1)
+        XCTAssertEqual(sessions.first?.chunks.first?.id, "item-1")
+        XCTAssertEqual(sessions.first?.chunks.first?.transcript, "Hello")
+    }
+
+    func testWireAudioHistorySkipsFailedSend() async throws {
+        let realtime = FailingRealtimeClient()
+        let audio = TestAudioCapture()
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: base) }
+        let store = DictationAudioHistoryStore(baseURL: base)
+
+        let viewModel = TranscriptionViewModel(
+            keychain: InMemoryKeychainStore(),
+            audioCapture: audio,
+            realtimeFactory: { _ in realtime },
+            restClient: TestRestClient(),
+            permissionRequester: { true },
+            notchOverlay: TestNotchOverlay(),
+            pttTailNanos: 0,
+            accessibilityChecker: { true },
+            secureInputChecker: { false },
+            permissionsPresenter: {},
+            dictationInjector: TestDictationInjector(),
+            clipboardWriter: { _ in },
+            audioHistoryStore: store,
+        )
+
+        viewModel.apiKeyInput = "sk-test"
+        await viewModel.startAndWait()
+        audio.emit(Data([0x01, 0x02]))
+        await Task.yield()
+
+        realtime.emit(.inputAudioCommitted(.init(itemId: "item-1", previousItemId: nil)))
+        try? await Task.sleep(nanoseconds: 5_000_000)
+
+        let sessions = viewModel.dictationAudioHistorySessions
+        XCTAssertEqual(sessions.first?.chunks.first?.byteCount ?? 0, 0)
     }
 
     func testRealtimeFailureFallsBackToRestWithSingleRetry() async {

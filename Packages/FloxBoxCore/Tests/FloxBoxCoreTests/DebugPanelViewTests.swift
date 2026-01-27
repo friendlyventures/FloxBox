@@ -13,4 +13,25 @@ final class DebugPanelViewTests: XCTestCase {
         let model = FloxBoxAppModel.preview(configuration: .appStore)
         _ = DebugPanelView(model: model)
     }
+
+    func testDebugPanelBuildsWithAudioHistory() {
+        let model = FloxBoxAppModel.preview(configuration: .appStore)
+        model.viewModel.dictationAudioHistorySessions = [
+            DictationSessionRecord(
+                id: "session",
+                startedAt: Date(),
+                endedAt: Date(),
+                chunks: [
+                    DictationChunkRecord(
+                        id: "item",
+                        createdAt: Date(),
+                        wavPath: "session/chunk-001.wav",
+                        byteCount: 2,
+                        transcript: "Hello",
+                    ),
+                ],
+            ),
+        ]
+        _ = DebugPanelView(model: model)
+    }
 }

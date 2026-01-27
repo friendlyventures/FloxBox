@@ -53,6 +53,45 @@ final class TestRealtimeClient: RealtimeTranscriptionClient {
     }
 }
 
+enum TestRealtimeError: Error {
+    case sendFailed
+}
+
+final class FailingRealtimeClient: RealtimeTranscriptionClient {
+    private let stream: AsyncStream<RealtimeServerEvent>
+    private let continuation: AsyncStream<RealtimeServerEvent>.Continuation
+
+    init() {
+        var continuation: AsyncStream<RealtimeServerEvent>.Continuation!
+        stream = AsyncStream { continuation = $0 }
+        self.continuation = continuation
+    }
+
+    var events: AsyncStream<RealtimeServerEvent> {
+        stream
+    }
+
+    func connect() {}
+
+    func sendSessionUpdate(_: RealtimeTranscriptionSessionUpdate) async throws {}
+
+    func sendAudio(_: Data) async throws {
+        throw TestRealtimeError.sendFailed
+    }
+
+    func commitAudio() async throws {}
+
+    func clearAudioBuffer() async throws {}
+
+    func close() {
+        continuation.finish()
+    }
+
+    func emit(_ event: RealtimeServerEvent) {
+        continuation.yield(event)
+    }
+}
+
 final class BlockingRealtimeClient: RealtimeTranscriptionClient {
     private let stream: AsyncStream<RealtimeServerEvent>
     private let continuation: AsyncStream<RealtimeServerEvent>.Continuation

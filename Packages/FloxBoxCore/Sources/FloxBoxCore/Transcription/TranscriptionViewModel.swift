@@ -99,6 +99,8 @@ public final class TranscriptionViewModel {
     public var apiKeyInput: String
     public var apiKeyStatus: APIKeyStatus = .idle
     public var transcript: String = ""
+    public var dictationAudioHistorySessions: [DictationSessionRecord] = []
+    public let wireAudioPlayback = WireAudioPlaybackController()
     public var status: RecordingStatus = .idle
     public var errorMessage: String?
 
@@ -115,6 +117,8 @@ public final class TranscriptionViewModel {
     private let clipboardWriter: (String) -> Void
     private let notchOverlay: any NotchRecordingControlling
     private let toastPresenter: any ToastPresenting
+    private let audioHistoryStore: DictationAudioHistoryStore
+    private let audioHistoryRecorder: WireAudioHistoryRecorder
     private var client: (any RealtimeTranscriptionClient)?
     private var commitTask: Task<Void, Never>?
     private var receiveTask: Task<Void, Never>?
@@ -172,6 +176,7 @@ public final class TranscriptionViewModel {
             pasteboard.clearContents()
             pasteboard.setString(text, forType: .string)
         },
+        audioHistoryStore: DictationAudioHistoryStore? = nil,
     ) {
         self.keychain = keychain
         self.audioCapture = audioCapture
@@ -185,6 +190,10 @@ public final class TranscriptionViewModel {
         self.clipboardWriter = clipboardWriter
         self.notchOverlay = notchOverlay ?? NotchRecordingController()
         self.toastPresenter = toastPresenter ?? SystemNotificationPresenter()
+        let resolvedAudioHistoryStore = audioHistoryStore ?? DictationAudioHistoryStore()
+        self.audioHistoryStore = resolvedAudioHistoryStore
+        audioHistoryRecorder = WireAudioHistoryRecorder(store: resolvedAudioHistoryStore)
+        dictationAudioHistorySessions = (try? resolvedAudioHistoryStore.load()) ?? []
         self.restRetryDelayNanos = restRetryDelayNanos
         self.realtimeCompletionTimeoutNanos = realtimeCompletionTimeoutNanos
         self.restTimeoutNanos = restTimeoutNanos
@@ -199,6 +208,10 @@ public final class TranscriptionViewModel {
 
     public var isRecording: Bool {
         status == .recording
+    }
+
+    public var dictationAudioHistoryBaseURL: URL {
+        audioHistoryStore.baseURL
     }
 
     private var normalizedPrompt: String? {
@@ -260,7 +273,7 @@ public final class TranscriptionViewModel {
 
         guard let apiKey = await validateStart(sessionID: sessionID) else { return }
 
-        beginDictationSession()
+        beginDictationSession(sessionID: sessionID)
         let client = startRealtimeClient(apiKey: apiKey, sessionID: sessionID)
         guard startAudioCapture(sessionID: sessionID) else { return }
 
@@ -357,13 +370,18 @@ public final class TranscriptionViewModel {
         return apiKey
     }
 
-    private func beginDictationSession() {
+    private func beginDictationSession(sessionID: String) {
         transcriptStore.reset()
         transcript = ""
         ShortcutDebugLogger.log("dictation.start transcriptReset")
         dictationInjector.startSession()
         ShortcutDebugLogger.log("dictation.start sessionBegin")
         prepareWavCapture()
+        Task { [weak self] in
+            guard let self else { return }
+            await audioHistoryRecorder.startSession(sessionID: sessionID, startedAt: Date())
+            await refreshAudioHistory()
+        }
     }
 
     private func startRealtimeClient(apiKey: String, sessionID: String) -> any RealtimeTranscriptionClient {
@@ -627,6 +645,10 @@ public final class TranscriptionViewModel {
         }
     }
 
+    private func refreshAudioHistory() async {
+        dictationAudioHistorySessions = await audioHistoryRecorder.sessionsSnapshot()
+    }
+
     private func prepareWavCapture() {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("floxbox-ptt-\(UUID().uuidString).wav")
@@ -827,6 +849,7 @@ public final class TranscriptionViewModel {
                 }
                 do {
                     try await client.sendAudio(data)
+                    await audioHistoryRecorder.appendSentAudio(data)
                     if logFirstSend, let sessionID {
                         let okLog = [
                             "audio.send.first.ok",
@@ -954,10 +977,14 @@ public final class TranscriptionViewModel {
         switch event {
         case let .inputAudioCommitted(committed):
             handleInputAudioCommitted(committed)
+            await audioHistoryRecorder.commit(itemId: committed.itemId, createdAt: Date())
+            await refreshAudioHistory()
         case let .transcriptionDelta(delta):
             handleTranscriptionDelta(delta)
         case let .transcriptionCompleted(completed):
             actions = handleTranscriptionCompleted(completed)
+            await audioHistoryRecorder.updateTranscript(itemId: completed.itemId, text: completed.transcript)
+            await refreshAudioHistory()
         case let .error(message):
             actions = handleError(message)
         case .unknown:

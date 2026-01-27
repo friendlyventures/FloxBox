@@ -227,10 +227,112 @@ public struct DebugPanelView: View {
                 .frame(minWidth: 340, maxWidth: 380, maxHeight: .infinity)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
 
-                GroupBox("Transcription Prompt") {
-                    TextEditor(text: $viewModel.transcriptionPrompt)
-                        .font(.callout)
-                        .frame(maxHeight: .infinity)
+                VStack(spacing: 16) {
+                    GroupBox("Transcription Prompt") {
+                        TextEditor(text: $viewModel.transcriptionPrompt)
+                            .font(.callout)
+                            .frame(height: 200)
+                    }
+
+                    GroupBox("Dictation Audio History") {
+                        if viewModel.dictationAudioHistorySessions.isEmpty {
+                            Text("No dictation history yet.")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 8)
+                        } else {
+                            ScrollView {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    ForEach(viewModel.dictationAudioHistorySessions) { session in
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            HStack(spacing: 12) {
+                                                VStack(alignment: .leading, spacing: 2) {
+                                                    Text(session.startedAt.formatted(
+                                                        date: .abbreviated,
+                                                        time: .shortened,
+                                                    ))
+                                                    .font(.subheadline.weight(.semibold))
+                                                    Text("Session \(session.id)")
+                                                        .font(.caption)
+                                                        .foregroundStyle(.secondary)
+                                                }
+
+                                                Spacer()
+
+                                                Button("Play All") {
+                                                    viewModel.wireAudioPlayback.playAll(
+                                                        session: session,
+                                                        baseURL: viewModel.dictationAudioHistoryBaseURL,
+                                                    )
+                                                }
+                                                .buttonStyle(.borderedProminent)
+                                                .controlSize(.small)
+                                            }
+
+                                            VStack(alignment: .leading, spacing: 8) {
+                                                ForEach(Array(session.chunks.enumerated()),
+                                                        id: \.element.id)
+                                                { index, chunk in
+                                                    let isActive = viewModel.wireAudioPlayback.activeChunkID == chunk.id
+                                                    VStack(alignment: .leading, spacing: 6) {
+                                                        HStack(spacing: 8) {
+                                                            Button("Play") {
+                                                                viewModel.wireAudioPlayback.playChunk(
+                                                                    session: session,
+                                                                    chunk: chunk,
+                                                                    baseURL: viewModel.dictationAudioHistoryBaseURL,
+                                                                )
+                                                            }
+                                                            .buttonStyle(.bordered)
+                                                            .controlSize(.small)
+
+                                                            Text("Chunk \(index + 1)")
+                                                                .font(.caption.weight(.semibold))
+
+                                                            if isActive {
+                                                                Text("Playing")
+                                                                    .font(.caption2.weight(.semibold))
+                                                                    .padding(.horizontal, 6)
+                                                                    .padding(.vertical, 2)
+                                                                    .background(.green.opacity(0.2), in: Capsule())
+                                                            }
+
+                                                            Spacer()
+
+                                                            Text("\(chunk.byteCount) bytes")
+                                                                .font(.caption2)
+                                                                .foregroundStyle(.secondary)
+                                                        }
+
+                                                        TextEditor(text: .constant(chunk.transcript
+                                                                .isEmpty ? "(pending transcription)" : chunk
+                                                                .transcript))
+                                                            .font(.callout)
+                                                            .frame(minHeight: 60, maxHeight: 120)
+                                                            .disabled(true)
+                                                            .overlay(
+                                                                RoundedRectangle(cornerRadius: 8)
+                                                                    .stroke(.secondary.opacity(0.2)),
+                                                            )
+                                                    }
+                                                    .padding(8)
+                                                    .background(
+                                                        isActive ? Color.accentColor.opacity(0.12) : Color.clear,
+                                                        in: RoundedRectangle(cornerRadius: 10),
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        .padding(10)
+                                        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                                    }
+                                }
+                                .padding(.vertical, 8)
+                            }
+                            .frame(maxHeight: .infinity)
+                        }
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
