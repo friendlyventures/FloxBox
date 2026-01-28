@@ -257,9 +257,10 @@ final class TestToastPresenter: ToastPresenting {
 final class TestDictationInjector: DictationInjectionControlling {
     private(set) var startCount = 0
     private(set) var appliedTexts: [String] = []
+    private(set) var insertedTexts: [String] = []
     private(set) var finishCount = 0
     private(set) var events: [String] = []
-    var result = DictationInjectionResult(requiresClipboardFallback: false)
+    var result = DictationInjectionResult(requiresManualPaste: false)
 
     func startSession() {
         startCount += 1
@@ -269,6 +270,12 @@ final class TestDictationInjector: DictationInjectionControlling {
     func apply(text: String) {
         appliedTexts.append(text)
         events.append("apply:\(text)")
+    }
+
+    func insertFinal(text: String) -> Bool {
+        insertedTexts.append(text)
+        events.append("insertFinal:\(text)")
+        return !text.isEmpty
     }
 
     func finishSession() -> DictationInjectionResult {

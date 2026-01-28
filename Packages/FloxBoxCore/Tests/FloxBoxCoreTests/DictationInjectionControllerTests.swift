@@ -3,136 +3,77 @@ import XCTest
 
 @MainActor
 final class DictationInjectionControllerTests: XCTestCase {
-    func testApplyTextPostsBackspacesAndInsert() {
-        let poster = TestEventPoster()
-        let coalescer = ImmediateCoalescer()
+    func testInsertFinalUsesAXWhenAvailable() {
+        let inserter = TestTextInserter(success: true)
+        let fallback = TestTextInserter(success: false)
         let injector = DictationInjectionController(
-            eventPoster: poster,
-            coalescer: coalescer,
+            inserter: inserter,
+            fallbackInserter: fallback,
             frontmostAppProvider: { "com.apple.TextEdit" },
             bundleIdentifier: "com.floxbox.app",
         )
 
         injector.startSession()
-        injector.apply(text: "hello")
-        injector.apply(text: "hel")
+        _ = injector.insertFinal(text: "hello")
+        let result = injector.finishSession()
 
-        XCTAssertEqual(poster.backspaceCount, 2)
-        XCTAssertEqual(poster.inserted, ["hello", ""])
+        XCTAssertEqual(inserter.insertedTexts, ["hello"])
+        XCTAssertEqual(fallback.insertedTexts, [])
+        XCTAssertFalse(result.requiresManualPaste)
     }
 
-    func testAddsLeadingSpaceWhenPrecedingCharIsNonWhitespace() {
-        let poster = TestEventPoster()
-        let coalescer = ImmediateCoalescer()
-        let provider = TestFocusedTextContextProvider(value: "foo bar", caretIndex: 7)
+    func testInsertFinalFallsBackToCGEventWhenAXFails() {
+        let ax = TestTextInserter(success: false)
+        let cg = TestTextInserter(success: true)
         let injector = DictationInjectionController(
-            eventPoster: poster,
-            coalescer: coalescer,
-            focusedTextContextProvider: provider,
+            inserter: ax,
+            fallbackInserter: cg,
             frontmostAppProvider: { "com.apple.TextEdit" },
             bundleIdentifier: "com.floxbox.app",
         )
 
         injector.startSession()
-        injector.apply(text: "baz")
+        _ = injector.insertFinal(text: "hello")
+        let result = injector.finishSession()
 
-        XCTAssertEqual(poster.inserted, [" baz"])
+        XCTAssertEqual(ax.insertedTexts, ["hello"])
+        XCTAssertEqual(cg.insertedTexts, ["hello"])
+        XCTAssertFalse(result.requiresManualPaste)
     }
 
-    func testDoesNotAddLeadingSpaceWhenDictationStartsWithPunctuation() {
-        let poster = TestEventPoster()
-        let coalescer = ImmediateCoalescer()
+    func testInsertFinalAddsLeadingSpaceWhenPrecedingCharIsNonWhitespace() {
+        let inserter = TestTextInserter(success: true)
         let provider = TestFocusedTextContextProvider(value: "foo", caretIndex: 3)
         let injector = DictationInjectionController(
-            eventPoster: poster,
-            coalescer: coalescer,
+            inserter: inserter,
+            fallbackInserter: TestTextInserter(success: false),
             focusedTextContextProvider: provider,
             frontmostAppProvider: { "com.apple.TextEdit" },
             bundleIdentifier: "com.floxbox.app",
         )
 
         injector.startSession()
-        injector.apply(text: ",")
+        _ = injector.insertFinal(text: "bar")
 
-        XCTAssertEqual(poster.inserted, [","])
-    }
-
-    func testPrefixInsertedOnceAcrossUpdates() {
-        let poster = TestEventPoster()
-        let coalescer = ImmediateCoalescer()
-        let provider = TestFocusedTextContextProvider(value: "foo", caretIndex: 3)
-        let injector = DictationInjectionController(
-            eventPoster: poster,
-            coalescer: coalescer,
-            focusedTextContextProvider: provider,
-            frontmostAppProvider: { "com.apple.TextEdit" },
-            bundleIdentifier: "com.floxbox.app",
-        )
-
-        injector.startSession()
-        injector.apply(text: "hello")
-        injector.apply(text: "hello world")
-
-        XCTAssertEqual(poster.inserted, [" hello", " world"])
-    }
-
-    func testPrefixDeterminedAfterInitialEmptyUpdate() {
-        let poster = TestEventPoster()
-        let coalescer = ImmediateCoalescer()
-        let provider = TestFocusedTextContextProvider(value: "foo", caretIndex: 3)
-        let injector = DictationInjectionController(
-            eventPoster: poster,
-            coalescer: coalescer,
-            focusedTextContextProvider: provider,
-            frontmostAppProvider: { "com.apple.TextEdit" },
-            bundleIdentifier: "com.floxbox.app",
-        )
-
-        injector.startSession()
-        injector.apply(text: "")
-        injector.apply(text: "hello")
-
-        XCTAssertEqual(poster.inserted, [" hello"])
-    }
-
-    func testFallbackPrefixUsesPreviousSessionWhenNoContext() {
-        let poster = TestEventPoster()
-        let coalescer = ImmediateCoalescer()
-        let provider = NilFocusedTextContextProvider()
-        let injector = DictationInjectionController(
-            eventPoster: poster,
-            coalescer: coalescer,
-            focusedTextContextProvider: provider,
-            frontmostAppProvider: { "com.apple.TextEdit" },
-            bundleIdentifier: "com.floxbox.app",
-        )
-
-        injector.startSession()
-        injector.apply(text: "hello")
-        _ = injector.finishSession()
-
-        injector.startSession()
-        injector.apply(text: "world")
-
-        XCTAssertEqual(poster.inserted, ["hello", " world"])
+        XCTAssertEqual(inserter.insertedTexts, [" bar"])
     }
 
     func testFrontmostIsFloxBoxMarksFailure() {
-        let poster = TestEventPoster()
-        let coalescer = ImmediateCoalescer()
+        let inserter = TestTextInserter(success: true)
         let injector = DictationInjectionController(
-            eventPoster: poster,
-            coalescer: coalescer,
+            inserter: inserter,
+            fallbackInserter: TestTextInserter(success: true),
             frontmostAppProvider: { "com.floxbox.app" },
             bundleIdentifier: "com.floxbox.app",
         )
 
         injector.startSession()
-        injector.apply(text: "hello")
+        let didInsert = injector.insertFinal(text: "hello")
         let result = injector.finishSession()
 
-        XCTAssertTrue(result.requiresClipboardFallback)
-        XCTAssertEqual(poster.inserted, [])
+        XCTAssertFalse(didInsert)
+        XCTAssertTrue(result.requiresManualPaste)
+        XCTAssertEqual(inserter.insertedTexts, [])
     }
 }
 
@@ -145,29 +86,16 @@ private struct TestFocusedTextContextProvider: FocusedTextContextProviding {
     }
 }
 
-private struct NilFocusedTextContextProvider: FocusedTextContextProviding {
-    func focusedTextContext() -> FocusedTextContext? {
-        nil
-    }
-}
+private final class TestTextInserter: DictationTextInserting {
+    let success: Bool
+    private(set) var insertedTexts: [String] = []
 
-private final class TestEventPoster: DictationEventPosting {
-    var backspaceCount = 0
-    var inserted: [String] = []
-
-    func postBackspaces(_ count: Int) -> Bool {
-        backspaceCount += count
-        return true
+    init(success: Bool) {
+        self.success = success
     }
 
-    func postText(_ text: String) -> Bool {
-        inserted.append(text)
-        return true
+    func insert(text: String) -> Bool {
+        insertedTexts.append(text)
+        return success
     }
-}
-
-private final class ImmediateCoalescer: DictationUpdateCoalescing {
-    func enqueue(_ text: String, flush: @escaping (String) -> Void) { flush(text) }
-    func flush() {}
-    func cancel() {}
 }

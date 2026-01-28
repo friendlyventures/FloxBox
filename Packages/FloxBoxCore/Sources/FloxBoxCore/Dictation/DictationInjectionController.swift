@@ -17,17 +17,22 @@ public protocol DictationEventPosting {
 public protocol DictationInjectionControlling {
     func startSession()
     func apply(text: String)
+    func insertFinal(text: String) -> Bool
     func finishSession() -> DictationInjectionResult
 }
 
 public struct DictationInjectionResult: Equatable {
-    public let requiresClipboardFallback: Bool
+    public let requiresManualPaste: Bool
+
+    public var requiresClipboardFallback: Bool {
+        requiresManualPaste
+    }
 }
 
 @MainActor
 public final class DictationInjectionController {
-    private let eventPoster: DictationEventPosting
-    private let coalescer: DictationUpdateCoalescing
+    private let inserter: DictationTextInserting
+    private let fallbackInserter: DictationTextInserting
     private let focusedTextContextProvider: FocusedTextContextProviding
     private let frontmostAppProvider: () -> String?
     private let bundleIdentifier: String
@@ -41,14 +46,14 @@ public final class DictationInjectionController {
     private var lastSessionFrontmostApp: String?
 
     public init(
-        eventPoster: DictationEventPosting = CGEventPoster(),
-        coalescer: DictationUpdateCoalescing = DictationUpdateCoalescer(interval: 0.08),
+        inserter: DictationTextInserting = AXTextInserter(),
+        fallbackInserter: DictationTextInserting = CGEventTextInserter(),
         focusedTextContextProvider: FocusedTextContextProviding = AXFocusedTextContextProvider(),
         frontmostAppProvider: @escaping () -> String? = { NSWorkspace.shared.frontmostApplication?.bundleIdentifier },
         bundleIdentifier: String = Bundle.main.bundleIdentifier ?? "",
     ) {
-        self.eventPoster = eventPoster
-        self.coalescer = coalescer
+        self.inserter = inserter
+        self.fallbackInserter = fallbackInserter
         self.focusedTextContextProvider = focusedTextContextProvider
         self.frontmostAppProvider = frontmostAppProvider
         self.bundleIdentifier = bundleIdentifier
@@ -60,20 +65,45 @@ public final class DictationInjectionController {
         didInject = false
         didFail = false
         sessionPrefix = nil
-        coalescer.cancel()
     }
 
     public func apply(text: String) {
-        ShortcutDebugLogger.log("dictation.apply len=\(text.count)")
-        let resolved = resolvedText(for: text)
-        coalescer.enqueue(resolved) { [weak self] in
-            self?.flush(text: $0)
+        ShortcutDebugLogger.log("dictation.apply ignored len=\(text.count)")
+    }
+
+    @discardableResult
+    public func insertFinal(text: String) -> Bool {
+        guard !text.isEmpty else { return false }
+        ShortcutDebugLogger.log("dictation.insert.start len=\(text.count)")
+        let frontmost = frontmostAppProvider()
+        lastFrontmostApp = frontmost
+        if frontmost == bundleIdentifier {
+            ShortcutDebugLogger.log("dictation.insert blocked frontmost=\(frontmost ?? "nil")")
+            didFail = true
+            return false
         }
+
+        let resolved = resolvedText(for: text)
+        if inserter.insert(text: resolved) {
+            ShortcutDebugLogger.log("dictation.insert.ax.success len=\(resolved.count)")
+            lastInjected = resolved
+            didInject = true
+            return true
+        }
+        ShortcutDebugLogger.log("dictation.insert.ax.fail")
+
+        if fallbackInserter.insert(text: resolved) {
+            ShortcutDebugLogger.log("dictation.insert.cg.success len=\(resolved.count)")
+            lastInjected = resolved
+            didInject = true
+            return true
+        }
+        ShortcutDebugLogger.log("dictation.insert.cg.fail")
+        didFail = true
+        return false
     }
 
     public func finishSession() -> DictationInjectionResult {
-        coalescer.flush()
-        coalescer.cancel()
         if didInject {
             lastSessionInjectedText = lastInjected
             lastSessionFrontmostApp = lastFrontmostApp
@@ -81,42 +111,11 @@ public final class DictationInjectionController {
             lastSessionInjectedText = nil
             lastSessionFrontmostApp = nil
         }
-        let result = DictationInjectionResult(requiresClipboardFallback: didFail || !didInject)
+        let result = DictationInjectionResult(requiresManualPaste: didFail || !didInject)
         let finishMessage = "dictation.finish didInject=\(didInject) didFail=\(didFail) "
-            + "requiresClipboard=\(result.requiresClipboardFallback)"
+            + "requiresManualPaste=\(result.requiresManualPaste)"
         ShortcutDebugLogger.log(finishMessage)
         return result
-    }
-
-    private func flush(text: String) {
-        let frontmost = frontmostAppProvider()
-        lastFrontmostApp = frontmost
-        if frontmost == bundleIdentifier {
-            ShortcutDebugLogger.log("dictation.flush blocked frontmost=\(frontmost ?? "nil")")
-            didFail = true
-            return
-        }
-
-        let diff = DictationTextDiff.diff(from: lastInjected, to: text)
-        let preview = String(diff.insertText.prefix(80)).replacingOccurrences(of: "\n", with: "\\n")
-        let flushMessage = "dictation.flush frontmost=\(frontmost ?? "nil") "
-            + "last=\(lastInjected.count) new=\(text.count) "
-            + "backspace=\(diff.backspaceCount) insertLen=\(diff.insertText.count) "
-            + "preview=\(preview)"
-        ShortcutDebugLogger.log(flushMessage)
-        var didSend = false
-        if diff.backspaceCount > 0 {
-            didSend = eventPoster.postBackspaces(diff.backspaceCount) || didSend
-        }
-        if !diff.insertText.isEmpty {
-            didSend = eventPoster.postText(diff.insertText) || didSend
-        } else if diff.backspaceCount > 0 {
-            _ = eventPoster.postText("")
-        }
-        if !diff.insertText.isEmpty || diff.backspaceCount > 0 {
-            lastInjected = text
-            didInject = didInject || didSend
-        }
     }
 
     private func resolvedText(for text: String) -> String {
