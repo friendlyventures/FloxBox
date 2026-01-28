@@ -56,6 +56,7 @@ public final class TranscriptionViewModel {
     public var apiKeyInput: String
     public var apiKeyStatus: APIKeyStatus = .idle
     public var transcript: String = ""
+    public var lastFinalTranscript: String?
     public var dictationAudioHistorySessions: [DictationSessionRecord] = []
     public let wireAudioPlayback = WireAudioPlaybackController()
     public var status: RecordingStatus = .idle
@@ -110,6 +111,7 @@ public final class TranscriptionViewModel {
     private var isRestTranscribing = false
     private var pttTailNanos: UInt64
     private var didFinishInjection = false
+    private var didInsertFinalTranscript = false
     private var didEndAudioHistorySession = false
 
     public init(
@@ -283,6 +285,7 @@ public final class TranscriptionViewModel {
         isRestTranscribing = false
         pendingRestWavURL = nil
         didFinishInjection = false
+        didInsertFinalTranscript = false
         didEndAudioHistorySession = false
         toastPresenter.clearToast()
     }
@@ -720,7 +723,7 @@ public final class TranscriptionViewModel {
         transcriptStore.appendFinalText(text)
         let displayText = transcriptStore.displayText
         transcript = displayText
-        dictationInjector.apply(text: displayText)
+        insertFinalTranscriptIfNeeded()
         errorMessage = nil
         realtimeFailedWhileRecording = false
         pendingRestWavURL = nil
@@ -854,11 +857,9 @@ public final class TranscriptionViewModel {
         guard !didFinishInjection else { return }
         didFinishInjection = true
         let result = dictationInjector.finishSession()
-        guard result.requiresClipboardFallback else { return }
-        let text = transcriptStore.displayText
-        guard !text.isEmpty else { return }
-        clipboardWriter(text)
-        toastPresenter.showToast("Unable to insert text. Paste with Command+V.")
+        guard result.requiresManualPaste else { return }
+        guard let text = lastFinalTranscript, !text.isEmpty else { return }
+        toastPresenter.showToast("Unable to insert text. Use Menu Bar → Paste last transcript.")
     }
 
     private func finalizeAudioHistorySessionIfNeeded() {
@@ -918,6 +919,7 @@ public final class TranscriptionViewModel {
             return PostApplyActions()
         }
 
+        insertFinalTranscriptIfNeeded()
         var actions = PostApplyActions()
         actions.shouldCloseRealtime = true
         actions.shouldFinalize = true
@@ -963,8 +965,26 @@ public final class TranscriptionViewModel {
 
         let displayText = transcriptStore.displayText
         transcript = displayText
-        dictationInjector.apply(text: displayText)
 
         await applyPostActions(actions)
+    }
+
+    private func insertFinalTranscriptIfNeeded() {
+        guard !didInsertFinalTranscript else { return }
+        let text = transcriptStore.displayText
+        guard !text.isEmpty else { return }
+        lastFinalTranscript = text
+        _ = dictationInjector.insertFinal(text: text)
+        didInsertFinalTranscript = true
+    }
+
+    public func pasteLastTranscript() {
+        guard let text = lastFinalTranscript, !text.isEmpty else { return }
+        dictationInjector.startSession()
+        _ = dictationInjector.insertFinal(text: text)
+        let result = dictationInjector.finishSession()
+        if result.requiresManualPaste {
+            toastPresenter.showToast("Unable to insert text. Use Menu Bar → Paste last transcript.")
+        }
     }
 }

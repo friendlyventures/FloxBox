@@ -409,13 +409,71 @@ final class TranscriptionViewModelTests: XCTestCase {
         realtime.emit(.transcriptionCompleted(.init(itemId: "item-1", contentIndex: 0, transcript: "Hello")))
         try? await Task.sleep(nanoseconds: 10_000_000)
 
-        guard let applyIndex = injector.events.firstIndex(of: "apply:Hello"),
+        guard let insertIndex = injector.events.firstIndex(of: "insertFinal:Hello"),
               let finishIndex = injector.events.firstIndex(of: "finish")
         else {
-            XCTFail("Expected apply and finish events")
+            XCTFail("Expected insertFinal and finish events")
             return
         }
-        XCTAssertLessThan(applyIndex, finishIndex)
+        XCTAssertLessThan(insertIndex, finishIndex)
+    }
+
+    func testFinalInsertHappensOnlyOnCompletedTranscript() async {
+        let realtime = TestRealtimeClient()
+        let audio = TestAudioCapture()
+        let injector = TestDictationInjector()
+        let viewModel = TranscriptionViewModel(
+            keychain: InMemoryKeychainStore(),
+            audioCapture: audio,
+            realtimeFactory: { _ in realtime },
+            restClient: TestRestClient(),
+            permissionRequester: { true },
+            notchOverlay: TestNotchOverlay(),
+            toastPresenter: TestToastPresenter(),
+            pttTailNanos: 0,
+            accessibilityChecker: { true },
+            secureInputChecker: { false },
+            permissionsPresenter: {},
+            dictationInjector: injector,
+            clipboardWriter: { _ in },
+        )
+
+        viewModel.apiKeyInput = "sk-test"
+        await viewModel.startAndWait()
+        audio.emit(Data([0x01, 0x02]))
+        await Task.yield()
+        await viewModel.stopAndWait()
+
+        realtime.emit(.inputAudioCommitted(.init(itemId: "item-1", previousItemId: nil)))
+        realtime.emit(.transcriptionCompleted(.init(itemId: "item-1", contentIndex: 0, transcript: "Hello")))
+        try? await Task.sleep(nanoseconds: 10_000_000)
+
+        XCTAssertEqual(injector.insertedTexts, ["Hello"])
+        XCTAssertEqual(viewModel.lastFinalTranscript, "Hello")
+    }
+
+    func testPasteLastTranscriptCallsInsert() {
+        let injector = TestDictationInjector()
+        let viewModel = TranscriptionViewModel(
+            keychain: InMemoryKeychainStore(),
+            audioCapture: TestAudioCapture(),
+            realtimeFactory: { _ in TestRealtimeClient() },
+            restClient: TestRestClient(),
+            permissionRequester: { true },
+            notchOverlay: TestNotchOverlay(),
+            toastPresenter: TestToastPresenter(),
+            pttTailNanos: 0,
+            accessibilityChecker: { true },
+            secureInputChecker: { false },
+            permissionsPresenter: {},
+            dictationInjector: injector,
+            clipboardWriter: { _ in },
+        )
+
+        viewModel.lastFinalTranscript = "Hello"
+        viewModel.pasteLastTranscript()
+
+        XCTAssertEqual(injector.insertedTexts, ["Hello"])
     }
 
     func testStartBeginsRecordingBeforeSessionUpdateCompletesAndBuffersAudio() async {
