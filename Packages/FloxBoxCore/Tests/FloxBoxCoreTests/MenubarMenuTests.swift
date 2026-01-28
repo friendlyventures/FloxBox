@@ -15,4 +15,10 @@ final class MenubarMenuTests: XCTestCase {
         let menu = MenubarMenu(model: model)
         XCTAssertTrue(menu.hasCheckForUpdatesAction)
     }
+
+    func testMenuHasPasteLastTranscriptDisabledWhenEmpty() {
+        let model = FloxBoxAppModel.preview(configuration: .appStore)
+        let menu = MenubarMenu(model: model)
+        XCTAssertFalse(menu.hasLastTranscript)
+    }
 }

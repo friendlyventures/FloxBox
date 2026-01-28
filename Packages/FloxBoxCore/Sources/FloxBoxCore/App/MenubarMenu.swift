@@ -12,6 +12,11 @@ public struct MenubarMenu: View {
     }
 
     public var body: some View {
+        Button("Paste last transcript") {
+            model.viewModel.pasteLastTranscript()
+        }
+        .disabled(!hasLastTranscript)
+
         Button("Open Debug Panel") {
             openWindow(id: "debug")
         }
@@ -42,5 +47,10 @@ public struct MenubarMenu: View {
 
     var hasCheckForUpdatesAction: Bool {
         model.configuration.checkForUpdates != nil
+    }
+
+    var hasLastTranscript: Bool {
+        let text = model.viewModel.lastFinalTranscript?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text?.isEmpty == false
     }
 }
