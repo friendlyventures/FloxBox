@@ -858,6 +858,7 @@ public final class TranscriptionViewModel {
         didFinishInjection = true
         let result = dictationInjector.finishSession()
         guard result.requiresManualPaste else { return }
+        guard didInsertFinalTranscript else { return }
         guard let text = lastFinalTranscript, !text.isEmpty else { return }
         toastPresenter.showToast("Unable to insert text. Use Menu Bar → Paste last transcript.")
     }
