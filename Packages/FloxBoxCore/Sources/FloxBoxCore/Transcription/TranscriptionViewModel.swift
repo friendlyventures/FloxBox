@@ -42,10 +42,15 @@ public final class TranscriptionViewModel {
     public var model: TranscriptionModel = .defaultModel
     public var language: TranscriptionLanguage = .defaultLanguage
     public var noiseReduction: NoiseReductionOption = .defaultOption
+    // swiftlint:disable line_length
     public var transcriptionPrompt: String = """
-    You are a transcription assistant. Transcribe the spoken audio accurately.
-    Preserve casing and punctuation. Do not add extra words or commentary.
+    You are a transcription assistant. Transcribe the spoken audio accurately and fluently.
+    Return well-formed sentences and paragraphs that read as if written contiguously.
+    Remove disfluencies (e.g., "um", "uh", "like", "you know") and false starts unless clearly intended.
+    Insert punctuation and capitalization based on meaning and pauses. Use paragraph breaks for topic shifts or long pauses.
+    Do not add, omit, or rephrase content beyond cleaning disfluencies and formatting. No timestamps or commentary.
     """
+    // swiftlint:enable line_length
     public var availableInputDevices: [AudioInputDevice] = AudioInputDeviceProvider.availableDevices()
     public var selectedInputDeviceID: AudioDeviceID?
     public var vadMode: VADMode = .server
