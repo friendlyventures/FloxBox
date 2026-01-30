@@ -12,36 +12,49 @@ public struct MenubarMenu: View {
     }
 
     public var body: some View {
-        Button("Paste last transcript") {
+        Button {
             model.viewModel.pasteLastTranscript()
+        } label: {
+            Label("Paste last transcript", systemImage: "clipboard")
         }
         .disabled(!hasLastTranscript)
 
-        Button("Open Debug Panel") {
-            openWindow(id: "debug")
-        }
+        Divider()
 
-        Button("Settings") {
+        Button {
             openWindow(id: "settings")
-        }
-
-        if let checkForUpdates = model.configuration.checkForUpdates {
-            Button("Check for Updates") {
-                checkForUpdates()
-            }
+        } label: {
+            Label("Settings", systemImage: "gearshape")
         }
 
         if !permissionsViewModel.allGranted {
-            Divider()
-            Button("Permissions") {
+            Button {
                 model.presentPermissions()
+            } label: {
+                Label("Permissions", systemImage: "hand.raised")
             }
+        }
+
+        if let checkForUpdates = model.configuration.checkForUpdates {
+            Button {
+                checkForUpdates()
+            } label: {
+                Label("Check for Updates", systemImage: "arrow.triangle.2.circlepath")
+            }
+        }
+
+        Button {
+            openWindow(id: "debug")
+        } label: {
+            Label("Open Debug Panel", systemImage: "ladybug")
         }
 
         Divider()
 
-        Button("Quit") {
+        Button {
             NSApplication.shared.terminate(nil)
+        } label: {
+            Label("Quit FloxBox", systemImage: "power")
         }
     }
 
