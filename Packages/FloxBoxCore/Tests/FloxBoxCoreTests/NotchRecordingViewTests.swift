@@ -10,4 +10,11 @@ final class NotchRecordingViewTests: XCTestCase {
         state.showNetworkSpinner = true
         _ = NotchRecordingView(state: state)
     }
+
+    @MainActor
+    func testNotchRecordingViewBuildsInFormattingState() {
+        let state = NotchRecordingState()
+        state.isFormatting = true
+        _ = NotchRecordingView(state: state)
+    }
 }

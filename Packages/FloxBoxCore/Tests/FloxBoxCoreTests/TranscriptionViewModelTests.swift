@@ -128,6 +128,52 @@ final class TranscriptionViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.lastTranscriptWasFormatted)
     }
 
+    func testStopFormatsTranscriptShowsNotchFormattingIndicator() async {
+        let realtime = TestRealtimeClient()
+        let audio = TestAudioCapture()
+        let toast = TestToastPresenter()
+        let injector = TestDictationInjector()
+        let keychain = InMemoryKeychainStore()
+        let settingsSuite = UUID().uuidString
+        let settingsDefaults = UserDefaults(suiteName: settingsSuite)!
+        settingsDefaults.removePersistentDomain(forName: settingsSuite)
+        let formattingSettings = FormattingSettingsStore(userDefaults: settingsDefaults)
+        let glossaryStore = PersonalGlossaryStore(userDefaults: UserDefaults(suiteName: UUID().uuidString)!)
+        let formattingClient = TestFormattingClient(results: [.success("Raw text.")])
+        let overlay = TestNotchOverlay()
+
+        let viewModel = TranscriptionViewModel(
+            keychain: keychain,
+            audioCapture: audio,
+            realtimeFactory: { _ in realtime },
+            restClient: TestRestClient(),
+            permissionRequester: { true },
+            notchOverlay: overlay,
+            toastPresenter: toast,
+            pttTailNanos: 0,
+            accessibilityChecker: { true },
+            secureInputChecker: { false },
+            permissionsPresenter: {},
+            dictationInjector: injector,
+            clipboardWriter: { _ in },
+            formattingSettings: formattingSettings,
+            glossaryStore: glossaryStore,
+            formattingClientFactory: { _ in formattingClient },
+        )
+
+        viewModel.apiKeyInput = "sk-test"
+        await viewModel.startAndWait()
+        audio.emit(Data([0x01]))
+
+        await viewModel.stopAndWait()
+        realtime.emit(.inputAudioCommitted(.init(itemId: "item1", previousItemId: nil)))
+        realtime.emit(.transcriptionCompleted(.init(itemId: "item1", contentIndex: 0, transcript: "Raw text")))
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(overlay.showFormattingCount, 1)
+        XCTAssertGreaterThanOrEqual(overlay.hideCount, 1)
+    }
+
     func testWireAudioHistoryCreatesChunkOnCommit() async throws {
         let realtime = TestRealtimeClient()
         let audio = TestAudioCapture()

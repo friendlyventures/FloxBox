@@ -47,6 +47,7 @@ final class NotchRecordingController {
         state.showNetworkSpinner = false
         state.onCancel = nil
         state.isRecording = true
+        state.isFormatting = false
         withAnimation(.interpolatingSpring(stiffness: 260, damping: 18)) {
             state.isExpanded = true
         }
@@ -63,6 +64,7 @@ final class NotchRecordingController {
         window?.setAllowsMouseEvents(true)
         state.isRecording = false
         state.isAwaitingNetwork = true
+        state.isFormatting = false
         state.showNetworkSpinner = false
         state.onCancel = onCancel
         withAnimation(.interpolatingSpring(stiffness: 260, damping: 18)) {
@@ -78,12 +80,32 @@ final class NotchRecordingController {
         }
     }
 
+    func showFormatting() {
+        hideTask?.cancel()
+        hideTask = nil
+        spinnerTask?.cancel()
+        spinnerTask = nil
+
+        ensureWindow()
+        window?.orderFrontRegardless()
+        window?.setAllowsMouseEvents(false)
+        state.isRecording = false
+        state.isAwaitingNetwork = false
+        state.showNetworkSpinner = false
+        state.onCancel = nil
+        state.isFormatting = true
+        withAnimation(.interpolatingSpring(stiffness: 260, damping: 18)) {
+            state.isExpanded = true
+        }
+    }
+
     func hide() {
         hideTask?.cancel()
         spinnerTask?.cancel()
         spinnerTask = nil
         state.isRecording = false
         state.isAwaitingNetwork = false
+        state.isFormatting = false
         state.showNetworkSpinner = false
         state.onCancel = nil
         withAnimation(.easeInOut(duration: 0.18)) {

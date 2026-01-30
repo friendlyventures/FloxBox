@@ -241,6 +241,7 @@ final class TestFormattingClient: FormattingClientProtocol {
 final class TestNotchOverlay: NotchRecordingControlling {
     private(set) var showCount = 0
     private(set) var showAwaitingNetworkCount = 0
+    private(set) var showFormattingCount = 0
     private(set) var hideCount = 0
     private var cancelHandler: (() -> Void)?
 
@@ -251,6 +252,10 @@ final class TestNotchOverlay: NotchRecordingControlling {
     func showAwaitingNetwork(onCancel: @escaping () -> Void) {
         showAwaitingNetworkCount += 1
         cancelHandler = onCancel
+    }
+
+    func showFormatting() {
+        showFormattingCount += 1
     }
 
     func hide() {

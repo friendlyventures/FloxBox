@@ -29,6 +29,7 @@ public protocol RestTranscriptionClientProtocol: AnyObject {
 public protocol NotchRecordingControlling: AnyObject {
     func showRecording()
     func showAwaitingNetwork(onCancel: @escaping () -> Void)
+    func showFormatting()
     func hide()
 }
 
@@ -807,6 +808,7 @@ public final class TranscriptionViewModel {
     private func runFormatting(rawText: String, pipeline: FormattingPipeline) async {
         isFormattingFinalTranscript = true
         formattingStatus = .formatting(attempt: 1, maxAttempts: 1)
+        notchOverlay.showFormatting()
         toastPresenter.showToast("Polishing transcript…")
 
         do {
@@ -837,6 +839,7 @@ public final class TranscriptionViewModel {
         }
 
         isFormattingFinalTranscript = false
+        notchOverlay.hide()
         finalizeDictationInjectionIfNeeded()
     }
 

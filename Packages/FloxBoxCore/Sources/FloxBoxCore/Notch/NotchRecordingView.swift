@@ -4,6 +4,7 @@ final class NotchRecordingState: ObservableObject {
     @Published var isRecording = false
     @Published var isExpanded = false
     @Published var isAwaitingNetwork = false
+    @Published var isFormatting = false
     @Published var showNetworkSpinner = false
     @Published var layout = NotchRecordingLayout.placeholder
     var onCancel: (() -> Void)?
@@ -58,6 +59,10 @@ struct NotchRecordingView: View {
             .overlay(alignment: .trailing) {
                 if state.isAwaitingNetwork, state.showNetworkSpinner {
                     NetworkIndicatorView(onCancel: { state.onCancel?() })
+                        .frame(maxHeight: .infinity)
+                        .padding(.trailing, 12)
+                } else if state.isFormatting {
+                    FormattingIndicatorView()
                         .frame(maxHeight: .infinity)
                         .padding(.trailing, 12)
                 }
@@ -122,5 +127,14 @@ private struct NetworkIndicatorView: View {
         .buttonStyle(.plain)
         .frame(width: 16, height: 16)
         .onHover { isHovering = $0 }
+    }
+}
+
+private struct FormattingIndicatorView: View {
+    var body: some View {
+        ProgressView()
+            .progressViewStyle(.circular)
+            .tint(.white.opacity(0.85))
+            .frame(width: 16, height: 16)
     }
 }
