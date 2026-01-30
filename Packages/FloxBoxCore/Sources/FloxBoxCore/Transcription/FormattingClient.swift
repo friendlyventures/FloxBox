@@ -22,7 +22,11 @@ public final class OpenAIFormattingClient: FormattingClientProtocol {
 
     public func format(text: String, model: FormattingModel, glossary: [PersonalGlossaryEntry]) async throws -> String {
         let prompt = promptBuilder.makePrompt(text: text, glossary: glossary)
-        let payload = ResponseRequest(model: model.rawValue, input: prompt, temperature: 0.1)
+        let payload = ResponseRequest(
+            model: model.rawValue,
+            input: prompt,
+            reasoning: ReasoningOptions(effort: model.reasoningEffort),
+        )
         let body = try JSONEncoder().encode(payload)
 
         var request = URLRequest(url: endpoint)
@@ -77,7 +81,11 @@ private extension OpenAIFormattingClient {
 private struct ResponseRequest: Encodable {
     let model: String
     let input: String
-    let temperature: Double
+    let reasoning: ReasoningOptions
+}
+
+private struct ReasoningOptions: Encodable {
+    let effort: String
 }
 
 private struct ResponseEnvelope: Decodable {

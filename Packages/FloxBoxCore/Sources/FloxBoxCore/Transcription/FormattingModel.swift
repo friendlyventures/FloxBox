@@ -9,4 +9,13 @@ public enum FormattingModel: String, CaseIterable, Identifiable, Codable {
 
     public var id: String { rawValue }
     public var displayName: String { rawValue }
+
+    public var reasoningEffort: String {
+        switch self {
+        case .gpt5:
+            "none"
+        case .gpt5Mini, .gpt5Nano:
+            "minimal"
+        }
+    }
 }

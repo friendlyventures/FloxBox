@@ -20,6 +20,26 @@ final class FormattingClientTests: XCTestCase {
         XCTAssertTrue(recorder.lastBodyString?.contains("\"input\"") == true)
     }
 
+    func testFormattingClientOmitsTemperatureForGpt5Nano() async throws {
+        let recorder = RequestRecorder()
+        let session = URLSession(configuration: recorder.configuration)
+        let client = OpenAIFormattingClient(apiKey: "sk-test", session: session)
+
+        _ = try await client.format(text: "Raw", model: .gpt5Nano, glossary: [])
+
+        XCTAssertFalse(recorder.lastBodyString?.contains("temperature") == true)
+    }
+
+    func testFormattingClientIncludesReasoningEffortForGpt5Nano() async throws {
+        let recorder = RequestRecorder()
+        let session = URLSession(configuration: recorder.configuration)
+        let client = OpenAIFormattingClient(apiKey: "sk-test", session: session)
+
+        _ = try await client.format(text: "Raw", model: .gpt5Nano, glossary: [])
+
+        XCTAssertTrue(recorder.lastBodyString?.contains("\"reasoning\":{\"effort\":\"minimal\"}") == true)
+    }
+
     func testFormattingClientParsesOutputText() async throws {
         let recorder = RequestRecorder(responseBody: """
         {"output":[{"type":"message","content":[{"type":"output_text","text":"Formatted."}]}]}
