@@ -95,56 +95,120 @@ public struct PermissionsView: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            permissionRow(
-                title: "Input Monitoring",
-                description: "Needed for push-to-talk hotkey detection.",
-                granted: viewModel.inputMonitoringGranted,
-                action: { Task { await viewModel.requestInputMonitoringAccess() } },
+        VStack(alignment: .leading, spacing: 20) {
+            header
+
+            if !viewModel.allGranted {
+                Button {
+                    Task { await viewModel.requestAllAccess() }
+                } label: {
+                    Label("Request All Permissions", systemImage: "checkmark.seal")
+                }
+                .buttonStyle(.borderedProminent)
+            } else {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .foregroundStyle(.green)
+                    Text("All permissions granted.")
+                        .foregroundStyle(.secondary)
+                }
+                .font(.callout)
+            }
+
+            permissionCard(
+                PermissionCard(
+                    title: "Input Monitoring",
+                    description: "Needed for push-to-talk hotkey detection.",
+                    systemImage: "keyboard",
+                    granted: viewModel.inputMonitoringGranted,
+                    actionTitle: "Request Input Monitoring",
+                    action: { Task { await viewModel.requestInputMonitoringAccess() } },
+                ),
             )
 
-            Divider()
-
-            permissionRow(
-                title: "Accessibility",
-                description: "Needed to type into other apps.",
-                granted: viewModel.accessibilityGranted,
-                action: { Task { await viewModel.requestAccessibilityAccess() } },
+            permissionCard(
+                PermissionCard(
+                    title: "Accessibility",
+                    description: "Needed to type into other apps.",
+                    systemImage: "hand.raised",
+                    granted: viewModel.accessibilityGranted,
+                    actionTitle: "Request Accessibility",
+                    action: { Task { await viewModel.requestAccessibilityAccess() } },
+                ),
             )
 
-            Divider()
-
-            permissionRow(
-                title: "Microphone",
-                description: "Needed to capture dictation audio.",
-                granted: viewModel.microphoneGranted,
-                action: { Task { await viewModel.requestMicrophoneAccess() } },
+            permissionCard(
+                PermissionCard(
+                    title: "Microphone",
+                    description: "Needed to capture dictation audio.",
+                    systemImage: "mic",
+                    granted: viewModel.microphoneGranted,
+                    actionTitle: "Request Microphone",
+                    action: { Task { await viewModel.requestMicrophoneAccess() } },
+                ),
             )
 
-            Spacer()
+            Spacer(minLength: 0)
         }
-        .padding(20)
-        .frame(minWidth: 460, minHeight: 360)
+        .padding(24)
+        .frame(minWidth: 520, minHeight: 420)
+        .task { await viewModel.refresh() }
+    }
+
+    private struct PermissionCard {
+        let title: String
+        let description: String
+        let systemImage: String
+        let granted: Bool
+        let actionTitle: String
+        let action: () -> Void
+    }
+
+    private var header: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "hand.raised.square.fill")
+                .font(.system(size: 28))
+                .foregroundStyle(.tint)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Permissions")
+                    .font(.title2.weight(.semibold))
+                Text("FloxBox needs a few macOS permissions to listen and type for you.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.bottom, 4)
     }
 
     @ViewBuilder
-    private func permissionRow(
-        title: String,
-        description: String,
-        granted: Bool,
-        action: @escaping () -> Void,
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.headline)
-            Text(description)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            HStack(spacing: 12) {
-                Button("Request Access", action: action)
-                Text(granted ? "Granted" : "Not Granted")
-                    .foregroundStyle(granted ? .green : .red)
+    private func permissionCard(_ card: PermissionCard) -> some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(card.description)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+
+                HStack {
+                    statusBadge(granted: card.granted)
+                    Spacer()
+                    Button(card.actionTitle, action: card.action)
+                        .buttonStyle(.bordered)
+                }
             }
+            .padding(.top, 4)
+        } label: {
+            Label(card.title, systemImage: card.systemImage)
+                .font(.headline)
         }
+    }
+
+    private func statusBadge(granted: Bool) -> some View {
+        Text(granted ? "Granted" : "Not Granted")
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(granted ? .green : .red)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(granted ? Color.green.opacity(0.15) : Color.red.opacity(0.12))
+            .clipShape(Capsule())
     }
 }
