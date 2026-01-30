@@ -47,7 +47,7 @@ public final class DictationInjectionController {
 
     public init(
         inserter: DictationTextInserting = AXTextInserter(),
-        fallbackInserter: DictationTextInserting = CGEventTextInserter(),
+        fallbackInserter: DictationTextInserting = ClipboardTextInserter(),
         focusedTextContextProvider: FocusedTextContextProviding = AXFocusedTextContextProvider(),
         frontmostAppProvider: @escaping () -> String? = { NSWorkspace.shared.frontmostApplication?.bundleIdentifier },
         bundleIdentifier: String = Bundle.main.bundleIdentifier ?? "",
