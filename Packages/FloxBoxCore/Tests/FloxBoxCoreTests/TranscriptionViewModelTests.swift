@@ -483,6 +483,9 @@ final class TranscriptionViewModelTests: XCTestCase {
         let realtime = TestRealtimeClient()
         let audio = TestAudioCapture()
         let injector = TestDictationInjector()
+        let settingsDefaults = UserDefaults(suiteName: UUID().uuidString)!
+        let formattingSettings = FormattingSettingsStore(userDefaults: settingsDefaults)
+        formattingSettings.isEnabled = false
         let viewModel = TranscriptionViewModel(
             keychain: InMemoryKeychainStore(),
             audioCapture: audio,
@@ -497,6 +500,7 @@ final class TranscriptionViewModelTests: XCTestCase {
             permissionsPresenter: {},
             dictationInjector: injector,
             clipboardWriter: { _ in },
+            formattingSettings: formattingSettings,
         )
 
         viewModel.apiKeyInput = "sk-test"
@@ -522,6 +526,9 @@ final class TranscriptionViewModelTests: XCTestCase {
         let realtime = TestRealtimeClient()
         let audio = TestAudioCapture()
         let injector = TestDictationInjector()
+        let settingsDefaults = UserDefaults(suiteName: UUID().uuidString)!
+        let formattingSettings = FormattingSettingsStore(userDefaults: settingsDefaults)
+        formattingSettings.isEnabled = false
         let viewModel = TranscriptionViewModel(
             keychain: InMemoryKeychainStore(),
             audioCapture: audio,
@@ -536,6 +543,7 @@ final class TranscriptionViewModelTests: XCTestCase {
             permissionsPresenter: {},
             dictationInjector: injector,
             clipboardWriter: { _ in },
+            formattingSettings: formattingSettings,
         )
 
         viewModel.apiKeyInput = "sk-test"
