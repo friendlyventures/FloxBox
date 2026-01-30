@@ -32,13 +32,45 @@ public final class OpenAIFormattingClient: FormattingClientProtocol {
         request.httpBody = body
 
         let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
-            throw FormattingClientError.badResponse
+        guard let http = response as? HTTPURLResponse else {
+            throw FormattingClientError.badResponse(statusCode: -1, message: "No HTTP response")
+        }
+        guard (200 ..< 300).contains(http.statusCode) else {
+            let message = Self.extractErrorMessage(from: data)
+            throw FormattingClientError.badResponse(statusCode: http.statusCode, message: message)
         }
         let decoded = try JSONDecoder().decode(ResponseEnvelope.self, from: data)
         let text = decoded.outputText
         guard !text.isEmpty else { throw FormattingClientError.emptyOutput }
         return text
+    }
+}
+
+private extension OpenAIFormattingClient {
+    static func extractErrorMessage(from data: Data) -> String? {
+        if let decoded = try? JSONDecoder().decode(OpenAIErrorEnvelope.self, from: data) {
+            var parts: [String] = []
+            if let message = decoded.error.message, !message.isEmpty {
+                parts.append(message)
+            }
+            if let type = decoded.error.type, !type.isEmpty {
+                parts.append("type=\(type)")
+            }
+            if let code = decoded.error.code, !code.isEmpty {
+                parts.append("code=\(code)")
+            }
+            if let param = decoded.error.param, !param.isEmpty {
+                parts.append("param=\(param)")
+            }
+            if !parts.isEmpty {
+                return parts.joined(separator: " ")
+            }
+        }
+
+        let raw = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let raw, !raw.isEmpty else { return nil }
+        return raw.count > 200 ? "\(raw.prefix(200))…" : raw
     }
 }
 
@@ -70,7 +102,30 @@ private struct ResponseContent: Decodable {
     let text: String?
 }
 
-enum FormattingClientError: Error {
-    case badResponse
+private struct OpenAIErrorEnvelope: Decodable {
+    let error: OpenAIErrorDetail
+}
+
+private struct OpenAIErrorDetail: Decodable {
+    let message: String?
+    let type: String?
+    let code: String?
+    let param: String?
+}
+
+enum FormattingClientError: LocalizedError {
+    case badResponse(statusCode: Int, message: String?)
     case emptyOutput
+
+    var errorDescription: String? {
+        switch self {
+        case let .badResponse(statusCode, message):
+            if let message, !message.isEmpty {
+                return "Formatting failed (HTTP \(statusCode)): \(message)"
+            }
+            return "Formatting failed (HTTP \(statusCode))"
+        case .emptyOutput:
+            return "Formatting failed: empty output"
+        }
+    }
 }
