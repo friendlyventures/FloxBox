@@ -58,6 +58,37 @@ public final class TranscriptStore {
     }
 
     public var displayText: String {
-        order.compactMap { segments[$0]?.text }.joined(separator: "\n")
+        var output = ""
+        for itemId in order {
+            guard let text = segments[itemId]?.text, !text.isEmpty else { continue }
+            if output.isEmpty {
+                output = text
+                continue
+            }
+            if shouldInsertSpace(between: output, and: text) {
+                output.append(" ")
+            }
+            output.append(text)
+        }
+        return output
+    }
+
+    private func shouldInsertSpace(between existing: String, and next: String) -> Bool {
+        guard let lastChar = existing.last, let firstChar = next.first else { return false }
+        if lastChar.isWhitespace || firstChar.isWhitespace {
+            return false
+        }
+        if isClosingPunctuation(firstChar) || isOpeningPunctuation(lastChar) {
+            return false
+        }
+        return true
+    }
+
+    private func isClosingPunctuation(_ char: Character) -> Bool {
+        ".,!?;:)]}".contains(char)
+    }
+
+    private func isOpeningPunctuation(_ char: Character) -> Bool {
+        "([{".contains(char)
     }
 }

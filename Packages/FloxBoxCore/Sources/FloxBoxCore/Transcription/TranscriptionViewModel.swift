@@ -4,6 +4,7 @@ import CoreAudio
 import Foundation
 import Observation
 
+// swiftlint:disable file_length
 public protocol AudioCapturing {
     func setPreferredInputDevice(_ deviceID: AudioDeviceID?)
     func start(handler: @escaping (Data) -> Void) throws
@@ -42,15 +43,15 @@ public final class TranscriptionViewModel {
     public var model: TranscriptionModel = .defaultModel
     public var language: TranscriptionLanguage = .defaultLanguage
     public var noiseReduction: NoiseReductionOption = .defaultOption
-    // swiftlint:disable line_length
     public var transcriptionPrompt: String = """
     You are a transcription assistant. Transcribe the spoken audio accurately and fluently.
     Return well-formed sentences and paragraphs that read as if written contiguously.
     Remove disfluencies (e.g., "um", "uh", "like", "you know") and false starts unless clearly intended.
-    Insert punctuation and capitalization based on meaning and pauses. Use paragraph breaks for topic shifts or long pauses.
+    Insert punctuation and capitalization based on meaning and context.
+    Use paragraph breaks only for topic shifts or when the speaker explicitly indicates a new paragraph.
+    Do not use pauses or timing alone to create paragraph breaks.
     Do not add, omit, or rephrase content beyond cleaning disfluencies and formatting. No timestamps or commentary.
     """
-    // swiftlint:enable line_length
     public var availableInputDevices: [AudioInputDevice] = AudioInputDeviceProvider.availableDevices()
     public var selectedInputDeviceID: AudioDeviceID?
     public var vadMode: VADMode = .server
@@ -62,16 +63,26 @@ public final class TranscriptionViewModel {
     public var apiKeyStatus: APIKeyStatus = .idle
     public var transcript: String = ""
     public var lastFinalTranscript: String?
+    public var lastRawTranscript: String?
+    public var lastTranscriptWasFormatted: Bool = false
+    public var formattingStatus: FormattingStatus = .idle
     public var dictationAudioHistorySessions: [DictationSessionRecord] = []
     public let wireAudioPlayback = WireAudioPlaybackController()
     public var status: RecordingStatus = .idle
     public var errorMessage: String?
+
+    public var isFormattingEnabled: Bool {
+        formattingSettings.isEnabled
+    }
 
     private let audioCapture: any AudioCapturing
     private let transcriptStore = TranscriptStore()
     private let keychain: any KeychainStoring
     private let realtimeFactory: (String) -> any RealtimeTranscriptionClient
     private let restClient: (any RestTranscriptionClientProtocol)?
+    private let formattingSettings: FormattingSettingsStore
+    private let glossaryStore: PersonalGlossaryStore
+    private let formattingClientFactory: (String) -> FormattingClientProtocol
     private let permissionRequester: () async -> Bool
     private let accessibilityChecker: () -> Bool
     private let secureInputChecker: () -> Bool
@@ -115,6 +126,8 @@ public final class TranscriptionViewModel {
     private var restTimeoutNanos: UInt64
     private var isRestTranscribing = false
     private var pttTailNanos: UInt64
+    private var formattingTask: Task<Void, Never>?
+    private var isFormattingFinalTranscript = false
     private var didFinishInjection = false
     private var didInsertFinalTranscript = false
     private var didEndAudioHistorySession = false
@@ -142,11 +155,18 @@ public final class TranscriptionViewModel {
             pasteboard.setString(text, forType: .string)
         },
         audioHistoryStore: DictationAudioHistoryStore? = nil,
+        formattingSettings: FormattingSettingsStore = FormattingSettingsStore(),
+        glossaryStore: PersonalGlossaryStore = PersonalGlossaryStore(),
+        formattingClientFactory: @escaping (String)
+            -> FormattingClientProtocol = { OpenAIFormattingClient(apiKey: $0) },
     ) {
         self.keychain = keychain
         self.audioCapture = audioCapture
         self.realtimeFactory = realtimeFactory
         self.restClient = restClient
+        self.formattingSettings = formattingSettings
+        self.glossaryStore = glossaryStore
+        self.formattingClientFactory = formattingClientFactory
         self.permissionRequester = permissionRequester
         self.accessibilityChecker = accessibilityChecker
         self.secureInputChecker = secureInputChecker
@@ -203,6 +223,7 @@ public final class TranscriptionViewModel {
     public func clearTranscript() {
         transcriptStore.reset()
         transcript = ""
+        formattingStatus = .idle
     }
 
     public func refreshInputDevices() {
@@ -288,6 +309,10 @@ public final class TranscriptionViewModel {
         completionTimeoutTask?.cancel()
         completionTimeoutTask = nil
         isRestTranscribing = false
+        formattingTask?.cancel()
+        formattingTask = nil
+        isFormattingFinalTranscript = false
+        formattingStatus = .idle
         pendingRestWavURL = nil
         didFinishInjection = false
         didInsertFinalTranscript = false
@@ -568,6 +593,10 @@ public final class TranscriptionViewModel {
         restTranscriptionTask?.cancel()
         restTranscriptionTask = nil
         isRestTranscribing = false
+        formattingTask?.cancel()
+        formattingTask = nil
+        isFormattingFinalTranscript = false
+        formattingStatus = .idle
         if let pendingRestWavURL {
             try? FileManager.default.removeItem(at: pendingRestWavURL)
         }
@@ -728,13 +757,96 @@ public final class TranscriptionViewModel {
         transcriptStore.appendFinalText(text)
         let displayText = transcriptStore.displayText
         transcript = displayText
-        insertFinalTranscriptIfNeeded()
+        finalizeTranscript(rawText: displayText)
         errorMessage = nil
         realtimeFailedWhileRecording = false
         pendingRestWavURL = nil
         restRetryTask?.cancel()
         restRetryTask = nil
         toastPresenter.clearToast()
+    }
+
+    private func finalizeTranscript(rawText: String) {
+        lastRawTranscript = rawText
+        let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            finalizeDictationInjectionIfNeeded()
+            return
+        }
+
+        guard formattingSettings.isEnabled else {
+            formattingStatus = .idle
+            insertFinalTranscriptIfNeeded(text: rawText, wasFormatted: false)
+            finalizeDictationInjectionIfNeeded()
+            return
+        }
+
+        guard let pipeline = formattingPipelineForSession() else {
+            formattingStatus = .failed("Missing API key")
+            handleFormattingFailure(
+                message: "Formatting unavailable — missing API key",
+                rawText: rawText,
+            )
+            finalizeDictationInjectionIfNeeded()
+            return
+        }
+
+        formattingTask?.cancel()
+        formattingTask = Task { @MainActor [weak self] in
+            await self?.runFormatting(rawText: rawText, pipeline: pipeline)
+        }
+    }
+
+    private func formattingPipelineForSession() -> FormattingPipeline? {
+        guard let apiKey = activeAPIKey else { return nil }
+        let client = formattingClientFactory(apiKey)
+        return FormattingPipeline(client: client)
+    }
+
+    @MainActor
+    private func runFormatting(rawText: String, pipeline: FormattingPipeline) async {
+        isFormattingFinalTranscript = true
+        formattingStatus = .formatting(attempt: 1, maxAttempts: 1)
+        toastPresenter.showToast("Polishing transcript…")
+
+        do {
+            let formatted = try await pipeline.format(
+                text: rawText,
+                model: formattingSettings.model,
+                glossary: glossaryStore.activeEntries,
+                onAttempt: { [weak self] attempt, maxAttempts in
+                    guard let self else { return }
+                    formattingStatus = .formatting(attempt: attempt, maxAttempts: maxAttempts)
+                    if attempt > 1 {
+                        toastPresenter.showToast(
+                            "Retrying transcript formatting (attempt \(attempt) of \(maxAttempts))",
+                        )
+                    }
+                },
+            )
+            transcript = formatted
+            insertFinalTranscriptIfNeeded(text: formatted, wasFormatted: true)
+            formattingStatus = .completed
+            toastPresenter.clearToast()
+        } catch {
+            formattingStatus = .failed(error.localizedDescription)
+            handleFormattingFailure(
+                message: "Formatting failed — use Menu Bar → Paste last transcript (raw)",
+                rawText: rawText,
+            )
+        }
+
+        isFormattingFinalTranscript = false
+        finalizeDictationInjectionIfNeeded()
+    }
+
+    private func handleFormattingFailure(message: String, rawText: String) {
+        lastFinalTranscript = rawText
+        lastTranscriptWasFormatted = false
+        toastPresenter.showToast(message)
+        toastPresenter.showAction(title: "Paste raw transcript") { [weak self] in
+            self?.pasteLastTranscript()
+        }
     }
 
     private func enqueueAudioSend(_ data: Data) {
@@ -859,6 +971,7 @@ public final class TranscriptionViewModel {
 
     private func finalizeDictationInjectionIfNeeded() {
         finalizeAudioHistorySessionIfNeeded()
+        guard !isFormattingFinalTranscript else { return }
         guard !didFinishInjection else { return }
         didFinishInjection = true
         let result = dictationInjector.finishSession()
@@ -925,7 +1038,7 @@ public final class TranscriptionViewModel {
             return PostApplyActions()
         }
 
-        insertFinalTranscriptIfNeeded()
+        finalizeTranscript(rawText: transcriptStore.displayText)
         var actions = PostApplyActions()
         actions.shouldCloseRealtime = true
         actions.shouldFinalize = true
@@ -975,11 +1088,11 @@ public final class TranscriptionViewModel {
         await applyPostActions(actions)
     }
 
-    private func insertFinalTranscriptIfNeeded() {
+    private func insertFinalTranscriptIfNeeded(text: String, wasFormatted: Bool) {
         guard !didInsertFinalTranscript else { return }
-        let text = transcriptStore.displayText
         guard !text.isEmpty else { return }
         lastFinalTranscript = text
+        lastTranscriptWasFormatted = wasFormatted
         _ = dictationInjector.insertFinal(text: text)
         didInsertFinalTranscript = true
     }

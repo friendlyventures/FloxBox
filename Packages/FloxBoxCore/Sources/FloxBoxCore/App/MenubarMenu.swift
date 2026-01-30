@@ -15,7 +15,7 @@ public struct MenubarMenu: View {
         Button {
             model.viewModel.pasteLastTranscript()
         } label: {
-            Label("Paste last transcript", systemImage: "clipboard")
+            Label(pasteLabel, systemImage: "clipboard")
         }
         .disabled(!hasLastTranscript)
 
@@ -65,5 +65,12 @@ public struct MenubarMenu: View {
     var hasLastTranscript: Bool {
         let text = model.viewModel.lastFinalTranscript?.trimmingCharacters(in: .whitespacesAndNewlines)
         return text?.isEmpty == false
+    }
+
+    var pasteLabel: String {
+        if hasLastTranscript, model.viewModel.isFormattingEnabled, !model.viewModel.lastTranscriptWasFormatted {
+            return "Paste last transcript (raw)"
+        }
+        return "Paste last transcript"
     }
 }

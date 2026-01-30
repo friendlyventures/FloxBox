@@ -17,6 +17,14 @@ final class TranscriptionViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.apiKeyStatus, .idle)
     }
 
+    func testDefaultPromptAvoidsPauseBasedParagraphing() {
+        let viewModel = TranscriptionViewModel(keychain: InMemoryKeychainStore())
+        XCTAssertTrue(
+            viewModel.transcriptionPrompt
+                .contains("Do not use pauses or timing alone to create paragraph breaks."),
+        )
+    }
+
     func testLoadsAPIKeyFromKeychain() {
         let keychain = InMemoryKeychainStore()
         try? keychain.save("sk-test")
@@ -72,6 +80,52 @@ final class TranscriptionViewModelTests: XCTestCase {
 
         XCTAssertTrue(realtime.didClose)
         XCTAssertEqual(viewModel.transcript, "Test")
+    }
+
+    func testStopFormatsTranscriptBeforeInsert() async {
+        let realtime = TestRealtimeClient()
+        let audio = TestAudioCapture()
+        let toast = TestToastPresenter()
+        let injector = TestDictationInjector()
+        let keychain = InMemoryKeychainStore()
+        let settingsSuite = UUID().uuidString
+        let settingsDefaults = UserDefaults(suiteName: settingsSuite)!
+        settingsDefaults.removePersistentDomain(forName: settingsSuite)
+        let formattingSettings = FormattingSettingsStore(userDefaults: settingsDefaults)
+        let glossaryDefaults = UserDefaults(suiteName: UUID().uuidString)!
+        let glossaryStore = PersonalGlossaryStore(userDefaults: glossaryDefaults)
+        let formattingClient = TestFormattingClient(results: [.success("Raw text.")])
+
+        let viewModel = TranscriptionViewModel(
+            keychain: keychain,
+            audioCapture: audio,
+            realtimeFactory: { _ in realtime },
+            restClient: TestRestClient(),
+            permissionRequester: { true },
+            notchOverlay: TestNotchOverlay(),
+            toastPresenter: toast,
+            pttTailNanos: 0,
+            accessibilityChecker: { true },
+            secureInputChecker: { false },
+            permissionsPresenter: {},
+            dictationInjector: injector,
+            clipboardWriter: { _ in },
+            formattingSettings: formattingSettings,
+            glossaryStore: glossaryStore,
+            formattingClientFactory: { _ in formattingClient },
+        )
+
+        viewModel.apiKeyInput = "sk-test"
+        await viewModel.startAndWait()
+        audio.emit(Data([0x01]))
+
+        await viewModel.stopAndWait()
+        realtime.emit(.inputAudioCommitted(.init(itemId: "item1", previousItemId: nil)))
+        realtime.emit(.transcriptionCompleted(.init(itemId: "item1", contentIndex: 0, transcript: "Raw text")))
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(injector.insertedTexts.last, "Raw text.")
+        XCTAssertTrue(viewModel.lastTranscriptWasFormatted)
     }
 
     func testWireAudioHistoryCreatesChunkOnCommit() async throws {

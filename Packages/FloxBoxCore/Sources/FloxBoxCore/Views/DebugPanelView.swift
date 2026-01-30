@@ -62,6 +62,19 @@ public struct DebugPanelView: View {
                                     Spacer()
                                 }
 
+                                HStack {
+                                    Text("Formatting")
+                                    Spacer()
+                                    Text(viewModel.formattingStatus.label)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                if case let .failed(message) = viewModel.formattingStatus {
+                                    Text(message)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+
                                 #if DEBUG
                                     if let error = viewModel.errorMessage {
                                         Text("Debug Error: \(error)")

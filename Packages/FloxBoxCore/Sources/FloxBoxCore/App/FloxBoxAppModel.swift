@@ -20,6 +20,8 @@ public final class FloxBoxAppModel {
     public let permissionsPresenter: PermissionsPresenter
     public var viewModel: TranscriptionViewModel
     public let shortcutStore: ShortcutStore
+    public var formattingSettings: FormattingSettingsStore
+    public var glossaryStore: PersonalGlossaryStore
     public let permissionsViewModel: PermissionsViewModel
     public let shortcutCoordinator: ShortcutCoordinator?
     public let permissionsCoordinator: PermissionsCoordinator?
@@ -32,14 +34,22 @@ public final class FloxBoxAppModel {
         permissionsPresenter: PermissionsPresenter? = nil,
         viewModel: TranscriptionViewModel? = nil,
         shortcutStore: ShortcutStore? = nil,
+        formattingSettings: FormattingSettingsStore? = nil,
+        glossaryStore: PersonalGlossaryStore? = nil,
         makePermissionsCoordinator: (() -> Coordinating)? = nil,
         makeShortcutCoordinator: (() -> Coordinating)? = nil,
     ) {
         let resolvedPresenter = permissionsPresenter ?? PermissionsPresenter()
         let resolvedShortcutStore = shortcutStore ?? ShortcutStore()
-        let resolvedViewModel = viewModel ?? TranscriptionViewModel(permissionsPresenter: {
-            resolvedPresenter.present()
-        })
+        let resolvedFormattingSettings = formattingSettings ?? FormattingSettingsStore()
+        let resolvedGlossaryStore = glossaryStore ?? PersonalGlossaryStore()
+        let resolvedViewModel = viewModel ?? TranscriptionViewModel(
+            permissionsPresenter: {
+                resolvedPresenter.present()
+            },
+            formattingSettings: resolvedFormattingSettings,
+            glossaryStore: resolvedGlossaryStore,
+        )
 
         let inputMonitoringClient = InputMonitoringPermissionClient()
         let accessibilityClient = AccessibilityPermissionClient()
@@ -82,6 +92,8 @@ public final class FloxBoxAppModel {
         self.permissionsPresenter = resolvedPresenter
         self.viewModel = resolvedViewModel
         self.shortcutStore = resolvedShortcutStore
+        self.formattingSettings = resolvedFormattingSettings
+        self.glossaryStore = resolvedGlossaryStore
         self.permissionsViewModel = permissionsViewModel
         self.permissionsWindow = permissionsWindow
         self.permissionsCoordinator = permissionsCoordinator as? PermissionsCoordinator

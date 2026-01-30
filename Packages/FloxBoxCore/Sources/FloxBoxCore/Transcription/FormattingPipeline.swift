@@ -22,9 +22,11 @@ public final class FormattingPipeline {
         text: String,
         model: FormattingModel,
         glossary: [PersonalGlossaryEntry],
+        onAttempt: ((Int, Int) -> Void)? = nil,
     ) async throws -> String {
         var lastError: Error?
         for attempt in 1 ... maxAttempts {
+            onAttempt?(attempt, maxAttempts)
             do {
                 let formatted = try await client.format(text: text, model: model, glossary: glossary)
                 guard validator.isAcceptable(original: text, formatted: formatted) else {

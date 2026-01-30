@@ -16,8 +16,28 @@ public struct SettingsView: View {
                 status: $model.viewModel.apiKeyStatus,
                 onSave: model.viewModel.saveAPIKey,
             )
+
+            GroupBox("Formatting") {
+                VStack(alignment: .leading, spacing: 12) {
+                    Toggle("Post-process final transcript", isOn: $model.formattingSettings.isEnabled)
+
+                    Picker("Model", selection: $model.formattingSettings.model) {
+                        ForEach(FormattingModel.allCases) { model in
+                            Text(model.displayName).tag(model)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    Text("Formatting runs after recording to clean punctuation and apply your glossary.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            GlossaryEditorView(store: model.glossaryStore)
         }
         .padding(20)
-        .frame(minWidth: 420, minHeight: 240)
+        .frame(minWidth: 520, minHeight: 520)
     }
 }
