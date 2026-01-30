@@ -39,6 +39,7 @@ public final class ClipboardTextInserter: DictationTextInserting {
     private let restoreDelay: TimeInterval
     private let restoreScheduler: (TimeInterval, @escaping () -> Void) -> Void
     private let sourceIdentifier: String
+    private let logger: (String) -> Void
 
     public init(
         pasteboardProvider: @escaping () -> PasteboardAccessing = { NSPasteboard.general },
@@ -48,16 +49,19 @@ public final class ClipboardTextInserter: DictationTextInserting {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
         },
         sourceIdentifier: String = Bundle.main.bundleIdentifier ?? "FloxBox",
+        logger: ((String) -> Void)? = nil,
     ) {
         self.pasteboardProvider = pasteboardProvider
         self.commandVPaster = commandVPaster
         self.restoreDelay = restoreDelay
         self.restoreScheduler = restoreScheduler
         self.sourceIdentifier = sourceIdentifier
+        self.logger = logger ?? ShortcutDebugLogger.log
     }
 
     public func insert(text: String) -> Bool {
         guard !text.isEmpty else { return false }
+        logger("clipboard.insert.start len=\(text.count) delay=\(restoreDelay)")
         let pasteboard = pasteboardProvider()
         let originalItems = pasteboard.pasteboardItems ?? []
         let originalSnapshots = originalItems.map { snapshot(for: $0) }
@@ -67,13 +71,17 @@ public final class ClipboardTextInserter: DictationTextInserting {
         guard pasteboard.writeObjects([item]) else { return false }
         let temporaryChangeCount = pasteboard.changeCount
 
-        guard commandVPaster.postCommandV() else {
+        let posted = commandVPaster.postCommandV()
+        logger("clipboard.insert.commandV result=\(posted)")
+        guard posted else {
+            logger("clipboard.restore.immediate")
             restoreIfUnchanged(pasteboard: pasteboard, snapshots: originalSnapshots, changeCount: temporaryChangeCount)
             return false
         }
 
         restoreScheduler(restoreDelay) { [weak pasteboard] in
             guard let pasteboard else { return }
+            self.logger("clipboard.restore.deferred")
             self.restoreIfUnchanged(
                 pasteboard: pasteboard,
                 snapshots: originalSnapshots,
@@ -97,7 +105,10 @@ public final class ClipboardTextInserter: DictationTextInserting {
         snapshots: [PasteboardItemSnapshot],
         changeCount: Int,
     ) {
-        guard pasteboard.changeCount == changeCount else { return }
+        guard pasteboard.changeCount == changeCount else {
+            logger("clipboard.restore.skip changeCount=\(pasteboard.changeCount)")
+            return
+        }
         pasteboard.clearContents()
         if !snapshots.isEmpty {
             let items = snapshots.map { snapshot in

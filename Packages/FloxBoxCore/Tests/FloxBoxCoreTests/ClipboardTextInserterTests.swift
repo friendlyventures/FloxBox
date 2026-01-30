@@ -66,6 +66,25 @@ final class ClipboardTextInserterTests: XCTestCase {
         XCTAssertEqual(pasteboard.stringValue, "original")
     }
 
+    func testInsertLogsPasteAndRestoreWhenPasteFails() {
+        let pasteboard = TestPasteboard(items: [])
+        var logs: [String] = []
+
+        let inserter = ClipboardTextInserter(
+            pasteboardProvider: { pasteboard },
+            commandVPaster: TestCommandVPaster(success: false),
+            restoreDelay: 0,
+            restoreScheduler: { _, work in work() },
+            logger: { logs.append($0) },
+        )
+
+        _ = inserter.insert(text: "Hello")
+
+        XCTAssertTrue(logs.contains { $0.contains("clipboard.insert.start") })
+        XCTAssertTrue(logs.contains { $0.contains("clipboard.insert.commandV result=false") })
+        XCTAssertTrue(logs.contains { $0.contains("clipboard.restore.immediate") })
+    }
+
     func testRestoreUsesClonedItems() {
         let original = makePasteboardItem(string: "original")
         let pasteboard = TestPasteboard(items: [original])
