@@ -1,6 +1,6 @@
 import Foundation
 
-#if DEBUG
+#if DEBUG || DIRECT_DISTRIBUTION
     enum DebugLog {
         private static let queue = DispatchQueue(label: "com.floxbox.debuglog", qos: .utility)
         private static let formatter: ISO8601DateFormatter = {

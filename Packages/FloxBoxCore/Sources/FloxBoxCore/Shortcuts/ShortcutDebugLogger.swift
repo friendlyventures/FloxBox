@@ -1,6 +1,6 @@
 import Foundation
 
-#if DEBUG
+#if DEBUG || DIRECT_DISTRIBUTION
     enum ShortcutDebugLogger {
         private static let queue = DispatchQueue(label: "org.friendlyventures.FloxBox.shortcuts.logger")
         private static let url: URL = {
