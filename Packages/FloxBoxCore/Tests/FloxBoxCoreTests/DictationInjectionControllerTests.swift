@@ -41,6 +41,27 @@ final class DictationInjectionControllerTests: XCTestCase {
         XCTAssertFalse(result.requiresManualPaste)
     }
 
+    func testInsertFinalPrefersClipboardForGhostty() {
+        let ax = TestTextInserter(success: true)
+        let cg = TestTextInserter(success: true)
+        let injector = DictationInjectionController(
+            inserter: ax,
+            fallbackInserter: cg,
+            frontmostAppProvider: { "com.mitchellh.ghostty" },
+            bundleIdentifier: "com.floxbox.app",
+            clipboardPreferredBundleIdentifiers: ["com.mitchellh.ghostty"],
+        )
+
+        injector.startSession()
+        let didInsert = injector.insertFinal(text: "hello")
+        let result = injector.finishSession()
+
+        XCTAssertTrue(didInsert)
+        XCTAssertEqual(ax.insertedTexts, [])
+        XCTAssertEqual(cg.insertedTexts, ["hello"])
+        XCTAssertFalse(result.requiresManualPaste)
+    }
+
     func testInsertFinalAddsLeadingSpaceWhenPrecedingCharIsNonWhitespace() {
         let inserter = TestTextInserter(success: true)
         let provider = TestFocusedTextContextProvider(value: "foo", caretIndex: 3)
