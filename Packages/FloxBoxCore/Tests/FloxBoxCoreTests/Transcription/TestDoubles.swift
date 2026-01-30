@@ -212,6 +212,31 @@ final class TestRestClient: RestTranscriptionClientProtocol {
     }
 }
 
+final class TestFormattingClient: FormattingClientProtocol {
+    enum Result {
+        case success(String)
+        case failure
+    }
+
+    private var results: [Result]
+    private(set) var callCount = 0
+
+    init(results: [Result]) {
+        self.results = results
+    }
+
+    func format(text _: String, model _: FormattingModel, glossary _: [PersonalGlossaryEntry]) async throws -> String {
+        callCount += 1
+        guard !results.isEmpty else { return "" }
+        switch results.removeFirst() {
+        case let .success(value):
+            return value
+        case .failure:
+            throw FormattingPipelineError.unknown
+        }
+    }
+}
+
 @MainActor
 final class TestNotchOverlay: NotchRecordingControlling {
     private(set) var showCount = 0
