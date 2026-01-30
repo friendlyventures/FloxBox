@@ -3,53 +3,12 @@ import XCTest
 
 @MainActor
 final class DictationInjectionControllerTests: XCTestCase {
-    func testInsertFinalUsesAXWhenAvailable() {
-        let inserter = TestTextInserter(success: true)
-        let fallback = TestTextInserter(success: false)
+    func testInsertFinalUsesClipboardInserter() {
+        let clipboard = TestTextInserter(success: true)
         let injector = DictationInjectionController(
-            inserter: inserter,
-            fallbackInserter: fallback,
+            clipboardInserter: clipboard,
             frontmostAppProvider: { "com.apple.TextEdit" },
             bundleIdentifier: "com.floxbox.app",
-        )
-
-        injector.startSession()
-        _ = injector.insertFinal(text: "hello")
-        let result = injector.finishSession()
-
-        XCTAssertEqual(inserter.insertedTexts, ["hello"])
-        XCTAssertEqual(fallback.insertedTexts, [])
-        XCTAssertFalse(result.requiresManualPaste)
-    }
-
-    func testInsertFinalFallsBackToCGEventWhenAXFails() {
-        let ax = TestTextInserter(success: false)
-        let cg = TestTextInserter(success: true)
-        let injector = DictationInjectionController(
-            inserter: ax,
-            fallbackInserter: cg,
-            frontmostAppProvider: { "com.apple.TextEdit" },
-            bundleIdentifier: "com.floxbox.app",
-        )
-
-        injector.startSession()
-        _ = injector.insertFinal(text: "hello")
-        let result = injector.finishSession()
-
-        XCTAssertEqual(ax.insertedTexts, ["hello"])
-        XCTAssertEqual(cg.insertedTexts, ["hello"])
-        XCTAssertFalse(result.requiresManualPaste)
-    }
-
-    func testInsertFinalPrefersClipboardForGhostty() {
-        let ax = TestTextInserter(success: true)
-        let cg = TestTextInserter(success: true)
-        let injector = DictationInjectionController(
-            inserter: ax,
-            fallbackInserter: cg,
-            frontmostAppProvider: { "com.mitchellh.ghostty" },
-            bundleIdentifier: "com.floxbox.app",
-            clipboardPreferredBundleIdentifiers: ["com.mitchellh.ghostty"],
         )
 
         injector.startSession()
@@ -57,17 +16,32 @@ final class DictationInjectionControllerTests: XCTestCase {
         let result = injector.finishSession()
 
         XCTAssertTrue(didInsert)
-        XCTAssertEqual(ax.insertedTexts, [])
-        XCTAssertEqual(cg.insertedTexts, ["hello"])
+        XCTAssertEqual(clipboard.insertedTexts, ["hello"])
         XCTAssertFalse(result.requiresManualPaste)
     }
 
+    func testInsertFinalMarksFailureWhenClipboardFails() {
+        let clipboard = TestTextInserter(success: false)
+        let injector = DictationInjectionController(
+            clipboardInserter: clipboard,
+            frontmostAppProvider: { "com.apple.TextEdit" },
+            bundleIdentifier: "com.floxbox.app",
+        )
+
+        injector.startSession()
+        let didInsert = injector.insertFinal(text: "hello")
+        let result = injector.finishSession()
+
+        XCTAssertFalse(didInsert)
+        XCTAssertEqual(clipboard.insertedTexts, ["hello"])
+        XCTAssertTrue(result.requiresManualPaste)
+    }
+
     func testInsertFinalAddsLeadingSpaceWhenPrecedingCharIsNonWhitespace() {
-        let inserter = TestTextInserter(success: true)
+        let clipboard = TestTextInserter(success: true)
         let provider = TestFocusedTextContextProvider(value: "foo", caretIndex: 3)
         let injector = DictationInjectionController(
-            inserter: inserter,
-            fallbackInserter: TestTextInserter(success: false),
+            clipboardInserter: clipboard,
             focusedTextContextProvider: provider,
             frontmostAppProvider: { "com.apple.TextEdit" },
             bundleIdentifier: "com.floxbox.app",
@@ -76,14 +50,13 @@ final class DictationInjectionControllerTests: XCTestCase {
         injector.startSession()
         _ = injector.insertFinal(text: "bar")
 
-        XCTAssertEqual(inserter.insertedTexts, [" bar"])
+        XCTAssertEqual(clipboard.insertedTexts, [" bar"])
     }
 
     func testFrontmostIsFloxBoxMarksFailure() {
-        let inserter = TestTextInserter(success: true)
+        let clipboard = TestTextInserter(success: true)
         let injector = DictationInjectionController(
-            inserter: inserter,
-            fallbackInserter: TestTextInserter(success: true),
+            clipboardInserter: clipboard,
             frontmostAppProvider: { "com.floxbox.app" },
             bundleIdentifier: "com.floxbox.app",
         )
@@ -94,7 +67,7 @@ final class DictationInjectionControllerTests: XCTestCase {
 
         XCTAssertFalse(didInsert)
         XCTAssertTrue(result.requiresManualPaste)
-        XCTAssertEqual(inserter.insertedTexts, [])
+        XCTAssertEqual(clipboard.insertedTexts, [])
     }
 }
 

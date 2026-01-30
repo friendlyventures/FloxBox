@@ -31,16 +31,10 @@ public struct DictationInjectionResult: Equatable {
 
 @MainActor
 public final class DictationInjectionController {
-    public nonisolated static let defaultClipboardPreferredBundleIdentifiers: Set<String> = [
-        "com.mitchellh.ghostty",
-    ]
-
-    private let inserter: DictationTextInserting
-    private let fallbackInserter: DictationTextInserting
+    private let clipboardInserter: DictationTextInserting
     private let focusedTextContextProvider: FocusedTextContextProviding
     private let frontmostAppProvider: () -> String?
     private let bundleIdentifier: String
-    private let clipboardPreferredBundleIdentifiers: Set<String>
 
     private var lastInjected = ""
     private var didInject = false
@@ -51,20 +45,15 @@ public final class DictationInjectionController {
     private var lastSessionFrontmostApp: String?
 
     public init(
-        inserter: DictationTextInserting = AXTextInserter(),
-        fallbackInserter: DictationTextInserting = ClipboardTextInserter(),
+        clipboardInserter: DictationTextInserting = ClipboardTextInserter(),
         focusedTextContextProvider: FocusedTextContextProviding = AXFocusedTextContextProvider(),
         frontmostAppProvider: @escaping () -> String? = { NSWorkspace.shared.frontmostApplication?.bundleIdentifier },
         bundleIdentifier: String = Bundle.main.bundleIdentifier ?? "",
-        clipboardPreferredBundleIdentifiers: Set<String> = DictationInjectionController
-            .defaultClipboardPreferredBundleIdentifiers,
     ) {
-        self.inserter = inserter
-        self.fallbackInserter = fallbackInserter
+        self.clipboardInserter = clipboardInserter
         self.focusedTextContextProvider = focusedTextContextProvider
         self.frontmostAppProvider = frontmostAppProvider
         self.bundleIdentifier = bundleIdentifier
-        self.clipboardPreferredBundleIdentifiers = clipboardPreferredBundleIdentifiers
     }
 
     public func startSession() {
@@ -93,27 +82,7 @@ public final class DictationInjectionController {
         }
 
         let resolved = resolvedText(for: text)
-        if let frontmost, clipboardPreferredBundleIdentifiers.contains(frontmost) {
-            ShortcutDebugLogger.log("dictation.insert preferClipboard frontmost=\(frontmost)")
-            if fallbackInserter.insert(text: resolved) {
-                ShortcutDebugLogger.log("dictation.insert.cg.success len=\(resolved.count)")
-                lastInjected = resolved
-                didInject = true
-                return true
-            }
-            ShortcutDebugLogger.log("dictation.insert.cg.fail")
-            didFail = true
-            return false
-        }
-        if inserter.insert(text: resolved) {
-            ShortcutDebugLogger.log("dictation.insert.ax.success len=\(resolved.count)")
-            lastInjected = resolved
-            didInject = true
-            return true
-        }
-        ShortcutDebugLogger.log("dictation.insert.ax.fail")
-
-        if fallbackInserter.insert(text: resolved) {
+        if clipboardInserter.insert(text: resolved) {
             ShortcutDebugLogger.log("dictation.insert.cg.success len=\(resolved.count)")
             lastInjected = resolved
             didInject = true
