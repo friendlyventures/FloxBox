@@ -60,6 +60,7 @@ public final class ClipboardTextInserter: DictationTextInserting {
         guard !text.isEmpty else { return false }
         let pasteboard = pasteboardProvider()
         let originalItems = pasteboard.pasteboardItems ?? []
+        let originalSnapshots = originalItems.map { snapshot(for: $0) }
 
         let item = makePasteboardItem(text: text, source: sourceIdentifier)
         pasteboard.clearContents()
@@ -67,13 +68,17 @@ public final class ClipboardTextInserter: DictationTextInserting {
         let temporaryChangeCount = pasteboard.changeCount
 
         guard commandVPaster.postCommandV() else {
-            restoreIfUnchanged(pasteboard: pasteboard, items: originalItems, changeCount: temporaryChangeCount)
+            restoreIfUnchanged(pasteboard: pasteboard, snapshots: originalSnapshots, changeCount: temporaryChangeCount)
             return false
         }
 
         restoreScheduler(restoreDelay) { [weak pasteboard] in
             guard let pasteboard else { return }
-            self.restoreIfUnchanged(pasteboard: pasteboard, items: originalItems, changeCount: temporaryChangeCount)
+            self.restoreIfUnchanged(
+                pasteboard: pasteboard,
+                snapshots: originalSnapshots,
+                changeCount: temporaryChangeCount,
+            )
         }
         return true
     }
@@ -89,13 +94,55 @@ public final class ClipboardTextInserter: DictationTextInserting {
 
     private func restoreIfUnchanged(
         pasteboard: PasteboardAccessing,
-        items: [NSPasteboardItem],
+        snapshots: [PasteboardItemSnapshot],
         changeCount: Int,
     ) {
         guard pasteboard.changeCount == changeCount else { return }
         pasteboard.clearContents()
-        if !items.isEmpty {
+        if !snapshots.isEmpty {
+            let items = snapshots.map { snapshot in
+                let item = NSPasteboardItem()
+                for (type, value) in snapshot.values {
+                    switch value {
+                    case let .string(stringValue):
+                        item.setString(stringValue, forType: type)
+                    case let .data(dataValue):
+                        item.setData(dataValue, forType: type)
+                    case let .propertyList(propertyValue):
+                        _ = item.setPropertyList(propertyValue, forType: type)
+                    }
+                }
+                return item
+            }
             _ = pasteboard.writeObjects(items)
         }
     }
+
+    private func snapshot(for item: NSPasteboardItem) -> PasteboardItemSnapshot {
+        var values: [NSPasteboard.PasteboardType: PasteboardValue] = [:]
+        for type in item.types {
+            if let stringValue = item.string(forType: type) {
+                values[type] = .string(stringValue)
+                continue
+            }
+            if let dataValue = item.data(forType: type) {
+                values[type] = .data(dataValue)
+                continue
+            }
+            if let value = item.propertyList(forType: type) {
+                values[type] = .propertyList(value)
+            }
+        }
+        return PasteboardItemSnapshot(values: values)
+    }
+}
+
+private struct PasteboardItemSnapshot {
+    let values: [NSPasteboard.PasteboardType: PasteboardValue]
+}
+
+private enum PasteboardValue {
+    case string(String)
+    case data(Data)
+    case propertyList(Any)
 }

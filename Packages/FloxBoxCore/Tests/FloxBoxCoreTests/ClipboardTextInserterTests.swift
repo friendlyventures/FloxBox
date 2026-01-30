@@ -65,14 +65,37 @@ final class ClipboardTextInserterTests: XCTestCase {
         XCTAssertFalse(inserter.insert(text: "hello"))
         XCTAssertEqual(pasteboard.stringValue, "original")
     }
+
+    func testRestoreUsesClonedItems() {
+        let original = makePasteboardItem(string: "original")
+        let pasteboard = TestPasteboard(items: [original])
+        let commandV = TestCommandVPaster(success: true)
+        var scheduled: (() -> Void)?
+
+        let inserter = ClipboardTextInserter(
+            pasteboardProvider: { pasteboard },
+            commandVPaster: commandV,
+            restoreDelay: 0,
+            restoreScheduler: { _, work in scheduled = work },
+            sourceIdentifier: "com.test",
+        )
+
+        XCTAssertTrue(inserter.insert(text: "hello"))
+        scheduled?()
+
+        XCTAssertFalse(pasteboard.attemptedOriginalRestore)
+    }
 }
 
 private final class TestPasteboard: PasteboardAccessing {
     private(set) var changeCount: Int = 0
     private var items: [NSPasteboardItem]
+    private let originalItemIDs: Set<ObjectIdentifier>
+    private(set) var attemptedOriginalRestore = false
 
     init(items: [NSPasteboardItem]) {
         self.items = items
+        originalItemIDs = Set(items.map { ObjectIdentifier($0) })
     }
 
     var pasteboardItems: [NSPasteboardItem]? { items }
@@ -88,6 +111,11 @@ private final class TestPasteboard: PasteboardAccessing {
     func writeObjects(_ objects: [NSPasteboardWriting]) -> Bool {
         let newItems = objects.compactMap { $0 as? NSPasteboardItem }
         guard newItems.count == objects.count else { return false }
+        if items.isEmpty,
+           newItems.contains(where: { originalItemIDs.contains(ObjectIdentifier($0)) })
+        {
+            attemptedOriginalRestore = true
+        }
         items = newItems
         changeCount += 1
         return true
