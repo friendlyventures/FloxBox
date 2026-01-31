@@ -827,7 +827,6 @@ public final class TranscriptionViewModel {
     @MainActor
     private func runFormatting(rawText: String, pipeline: FormattingPipeline) async {
         formattingStatus = .formatting(attempt: 1, maxAttempts: 1)
-        toastPresenter.showToast("Polishing transcript…")
 
         do {
             let formatted = try await pipeline.format(
@@ -837,11 +836,6 @@ public final class TranscriptionViewModel {
                 onAttempt: { [weak self] attempt, maxAttempts in
                     guard let self else { return }
                     formattingStatus = .formatting(attempt: attempt, maxAttempts: maxAttempts)
-                    if attempt > 1 {
-                        toastPresenter.showToast(
-                            "Retrying transcript formatting (attempt \(attempt) of \(maxAttempts))",
-                        )
-                    }
                 },
             )
             transcript = formatted
