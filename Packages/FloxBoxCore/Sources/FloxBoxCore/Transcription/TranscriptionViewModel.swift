@@ -856,7 +856,7 @@ public final class TranscriptionViewModel {
     }
 
     private func handleFormattingFailure(message: String, rawText: String) {
-        lastFinalTranscript = rawText
+        lastFinalTranscript = ensureTrailingSpace(rawText)
         lastTranscriptWasFormatted = false
         toastPresenter.showToast(message)
         toastPresenter.showAction(title: "Paste raw transcript") { [weak self] in
@@ -1108,19 +1108,29 @@ public final class TranscriptionViewModel {
     private func insertFinalTranscriptIfNeeded(text: String, wasFormatted: Bool) {
         guard !didInsertFinalTranscript else { return }
         guard !text.isEmpty else { return }
-        lastFinalTranscript = text
+        let resolved = ensureTrailingSpace(text)
+        lastFinalTranscript = resolved
         lastTranscriptWasFormatted = wasFormatted
-        _ = dictationInjector.insertFinal(text: text)
+        _ = dictationInjector.insertFinal(text: resolved)
         didInsertFinalTranscript = true
     }
 
     public func pasteLastTranscript() {
         guard let text = lastFinalTranscript, !text.isEmpty else { return }
+        let resolved = ensureTrailingSpace(text)
         dictationInjector.startSession()
-        _ = dictationInjector.insertFinal(text: text)
+        _ = dictationInjector.insertFinal(text: resolved)
         let result = dictationInjector.finishSession()
         if result.requiresManualPaste {
             toastPresenter.showToast("Unable to insert text. Use Menu Bar → Paste last transcript.")
         }
+    }
+
+    private func ensureTrailingSpace(_ text: String) -> String {
+        guard let lastScalar = text.unicodeScalars.last else { return text }
+        if CharacterSet.whitespacesAndNewlines.contains(lastScalar) {
+            return text
+        }
+        return text + " "
     }
 }

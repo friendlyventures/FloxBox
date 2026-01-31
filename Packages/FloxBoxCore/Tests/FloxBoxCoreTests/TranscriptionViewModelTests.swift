@@ -209,7 +209,7 @@ final class TranscriptionViewModelTests: XCTestCase {
         realtime.emit(.transcriptionCompleted(.init(itemId: "item1", contentIndex: 0, transcript: "Raw text")))
         try? await Task.sleep(nanoseconds: 50_000_000)
 
-        XCTAssertEqual(injector.insertedTexts.last, "Raw text.")
+        XCTAssertEqual(injector.insertedTexts.last, "Raw text. ")
         XCTAssertTrue(viewModel.lastTranscriptWasFormatted)
     }
 
@@ -625,7 +625,7 @@ final class TranscriptionViewModelTests: XCTestCase {
         realtime.emit(.transcriptionCompleted(.init(itemId: "item-1", contentIndex: 0, transcript: "Hello")))
         try? await Task.sleep(nanoseconds: 10_000_000)
 
-        guard let insertIndex = injector.events.firstIndex(of: "insertFinal:Hello"),
+        guard let insertIndex = injector.events.firstIndex(of: "insertFinal:Hello "),
               let finishIndex = injector.events.firstIndex(of: "finish")
         else {
             XCTFail("Expected insertFinal and finish events")
@@ -668,8 +668,8 @@ final class TranscriptionViewModelTests: XCTestCase {
         realtime.emit(.transcriptionCompleted(.init(itemId: "item-1", contentIndex: 0, transcript: "Hello")))
         try? await Task.sleep(nanoseconds: 10_000_000)
 
-        XCTAssertEqual(injector.insertedTexts, ["Hello"])
-        XCTAssertEqual(viewModel.lastFinalTranscript, "Hello")
+        XCTAssertEqual(injector.insertedTexts, ["Hello "])
+        XCTAssertEqual(viewModel.lastFinalTranscript, "Hello ")
     }
 
     func testPasteLastTranscriptCallsInsert() {
@@ -693,7 +693,7 @@ final class TranscriptionViewModelTests: XCTestCase {
         viewModel.lastFinalTranscript = "Hello"
         viewModel.pasteLastTranscript()
 
-        XCTAssertEqual(injector.insertedTexts, ["Hello"])
+        XCTAssertEqual(injector.insertedTexts, ["Hello "])
     }
 
     func testStartBeginsRecordingBeforeSessionUpdateCompletesAndBuffersAudio() async {
