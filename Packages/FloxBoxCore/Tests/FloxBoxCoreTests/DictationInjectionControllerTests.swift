@@ -18,7 +18,7 @@ final class DictationInjectionControllerTests: XCTestCase {
         let result = injector.finishSession()
 
         XCTAssertTrue(didInsert)
-        XCTAssertEqual(clipboard.insertedTexts, ["hello"])
+        XCTAssertEqual(clipboard.insertedTexts, ["hello "])
         XCTAssertFalse(result.requiresManualPaste)
     }
 
@@ -37,7 +37,7 @@ final class DictationInjectionControllerTests: XCTestCase {
         let result = injector.finishSession()
 
         XCTAssertFalse(didInsert)
-        XCTAssertEqual(clipboard.insertedTexts, ["hello"])
+        XCTAssertEqual(clipboard.insertedTexts, ["hello "])
         XCTAssertTrue(result.requiresManualPaste)
     }
 
@@ -54,7 +54,23 @@ final class DictationInjectionControllerTests: XCTestCase {
         injector.startSession()
         _ = injector.insertFinal(text: "bar")
 
-        XCTAssertEqual(clipboard.insertedTexts, [" bar"])
+        XCTAssertEqual(clipboard.insertedTexts, [" bar "])
+    }
+
+    func testInsertFinalDoesNotDuplicateTrailingWhitespace() {
+        let clipboard = TestTextInserter(success: true)
+        let provider = TestFocusedTextContextProvider(value: "", caretIndex: 0)
+        let injector = DictationInjectionController(
+            clipboardInserter: clipboard,
+            focusedTextContextProvider: provider,
+            frontmostAppProvider: { "com.apple.TextEdit" },
+            bundleIdentifier: "com.floxbox.app",
+        )
+
+        injector.startSession()
+        _ = injector.insertFinal(text: "hello ")
+
+        XCTAssertEqual(clipboard.insertedTexts, ["hello "])
     }
 
     func testFrontmostIsFloxBoxMarksFailure() {

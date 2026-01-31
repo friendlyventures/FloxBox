@@ -115,7 +115,16 @@ public final class DictationInjectionController {
         if sessionPrefix == nil {
             sessionPrefix = determinePrefix(for: text)
         }
-        return (sessionPrefix ?? "") + text
+        let resolved = (sessionPrefix ?? "") + text
+        return ensureTrailingSpace(for: resolved)
+    }
+
+    private func ensureTrailingSpace(for text: String) -> String {
+        guard let lastScalar = text.unicodeScalars.last else { return text }
+        if CharacterSet.whitespacesAndNewlines.contains(lastScalar) {
+            return text
+        }
+        return text + " "
     }
 
     private func determinePrefix(for text: String) -> String {
