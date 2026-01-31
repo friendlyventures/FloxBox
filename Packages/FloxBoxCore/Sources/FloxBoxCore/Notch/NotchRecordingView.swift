@@ -61,16 +61,16 @@ struct NotchRecordingView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .opacity(state.isExpanded ? 1 : 0)
                     .animation(.easeInOut(duration: 0.12), value: state.isExpanded)
-                } else if state.isFormatting {
-                    FormattingIndicatorView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .opacity(state.isExpanded ? 1 : 0)
-                        .animation(.easeInOut(duration: 0.12), value: state.isExpanded)
                 }
             }
             .overlay(alignment: .trailing) {
                 if state.isAwaitingNetwork, state.showNetworkSpinner {
                     NetworkIndicatorView(onCancel: { state.onCancel?() })
+                        .frame(maxHeight: .infinity)
+                        .padding(.trailing, NotchIndicatorStyle.trailingPadding)
+                        .padding(.vertical, NotchIndicatorStyle.verticalPadding)
+                } else if state.isFormatting {
+                    FormattingIndicatorView()
                         .frame(maxHeight: .infinity)
                         .padding(.trailing, NotchIndicatorStyle.trailingPadding)
                         .padding(.vertical, NotchIndicatorStyle.verticalPadding)
