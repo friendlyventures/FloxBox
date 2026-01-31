@@ -63,6 +63,14 @@ struct NotchRecordingView: View {
                     .animation(.easeInOut(duration: 0.12), value: state.isExpanded)
                 }
             }
+            .overlay(alignment: .leading) {
+                if state.isFormatting {
+                    FormattingLeftIndicatorView()
+                        .frame(maxHeight: .infinity)
+                        .padding(.leading, NotchIndicatorStyle.trailingPadding)
+                        .padding(.vertical, NotchIndicatorStyle.verticalPadding)
+                }
+            }
             .overlay(alignment: .trailing) {
                 if state.isAwaitingNetwork, state.showNetworkSpinner {
                     NetworkIndicatorView(onCancel: { state.onCancel?() })
@@ -147,5 +155,19 @@ private struct FormattingIndicatorView: View {
             .controlSize(.small)
             .tint(NotchIndicatorStyle.spinnerTint)
             .frame(width: NotchIndicatorStyle.size, height: NotchIndicatorStyle.size)
+    }
+}
+
+private struct FormattingLeftIndicatorView: View {
+    var body: some View {
+        Image(systemName: "textformat.alt")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(Color.white.opacity(0.7))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                Capsule()
+                    .fill(Color.white.opacity(0.12)),
+            )
     }
 }
