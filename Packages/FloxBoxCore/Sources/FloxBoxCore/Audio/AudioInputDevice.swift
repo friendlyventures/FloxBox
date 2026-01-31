@@ -25,6 +25,27 @@ public enum AudioInputDeviceProvider {
         return inputDevices.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
+    public static func builtInInputDeviceID() -> AudioDeviceID? {
+        let deviceIDs = allDeviceIDs()
+        let builtIn = deviceIDs.first { deviceID in
+            guard deviceHasInput(deviceID) else { return false }
+            return deviceTransportType(deviceID) == kAudioDeviceTransportTypeBuiltIn
+        }
+        if let builtIn {
+            return builtIn
+        }
+
+        let fallbackMatches = ["built-in microphone", "builtin microphone", "internal microphone", "macbook microphone"]
+        for deviceID in deviceIDs where deviceHasInput(deviceID) {
+            let name = (deviceName(deviceID) ?? "").lowercased()
+            let uid = (deviceUID(deviceID) ?? "").lowercased()
+            if fallbackMatches.contains(where: { name.contains($0) || uid.contains($0) }) {
+                return deviceID
+            }
+        }
+        return nil
+    }
+
     public static func defaultInputDeviceID() -> AudioDeviceID? {
         var deviceID = AudioDeviceID(0)
         var dataSize = UInt32(MemoryLayout<AudioDeviceID>.size)
@@ -148,4 +169,24 @@ private func deviceUID(_ deviceID: AudioDeviceID) -> String? {
     )
     guard status == noErr, let uid else { return nil }
     return uid.takeUnretainedValue() as String
+}
+
+private func deviceTransportType(_ deviceID: AudioDeviceID) -> UInt32? {
+    var address = AudioObjectPropertyAddress(
+        mSelector: kAudioDevicePropertyTransportType,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain,
+    )
+    var transportType: UInt32 = 0
+    var dataSize = UInt32(MemoryLayout<UInt32>.size)
+    let status = AudioObjectGetPropertyData(
+        deviceID,
+        &address,
+        0,
+        nil,
+        &dataSize,
+        &transportType,
+    )
+    guard status == noErr else { return nil }
+    return transportType
 }

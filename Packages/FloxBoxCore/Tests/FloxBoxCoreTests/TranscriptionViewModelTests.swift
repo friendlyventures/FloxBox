@@ -25,6 +25,91 @@ final class TranscriptionViewModelTests: XCTestCase {
         )
     }
 
+    func testUserSelectedInputDeviceWinsOverBuiltInPreference() async {
+        let audio = TestAudioCapture()
+        let realtime = TestRealtimeClient()
+        let viewModel = TranscriptionViewModel(
+            keychain: InMemoryKeychainStore(),
+            audioCapture: audio,
+            realtimeFactory: { _ in realtime },
+            restClient: TestRestClient(),
+            permissionRequester: { true },
+            notchOverlay: TestNotchOverlay(),
+            toastPresenter: TestToastPresenter(),
+            pttTailNanos: 0,
+            laptopOpenChecker: { true },
+            builtInMicProvider: { 42 },
+            accessibilityChecker: { true },
+            secureInputChecker: { false },
+            permissionsPresenter: {},
+            dictationInjector: TestDictationInjector(),
+            clipboardWriter: { _ in },
+        )
+
+        viewModel.selectedInputDeviceID = 99
+        viewModel.apiKeyInput = "sk-test"
+        await viewModel.startAndWait()
+
+        XCTAssertEqual(audio.preferredDeviceID, 99)
+        await viewModel.stopAndWait()
+    }
+
+    func testUsesBuiltInMicWhenLaptopOpenAndNoSelection() async {
+        let audio = TestAudioCapture()
+        let realtime = TestRealtimeClient()
+        let viewModel = TranscriptionViewModel(
+            keychain: InMemoryKeychainStore(),
+            audioCapture: audio,
+            realtimeFactory: { _ in realtime },
+            restClient: TestRestClient(),
+            permissionRequester: { true },
+            notchOverlay: TestNotchOverlay(),
+            toastPresenter: TestToastPresenter(),
+            pttTailNanos: 0,
+            laptopOpenChecker: { true },
+            builtInMicProvider: { 7 },
+            accessibilityChecker: { true },
+            secureInputChecker: { false },
+            permissionsPresenter: {},
+            dictationInjector: TestDictationInjector(),
+            clipboardWriter: { _ in },
+        )
+
+        viewModel.apiKeyInput = "sk-test"
+        await viewModel.startAndWait()
+
+        XCTAssertEqual(audio.preferredDeviceID, 7)
+        await viewModel.stopAndWait()
+    }
+
+    func testFallsBackToSystemDefaultWhenLaptopClosed() async {
+        let audio = TestAudioCapture()
+        let realtime = TestRealtimeClient()
+        let viewModel = TranscriptionViewModel(
+            keychain: InMemoryKeychainStore(),
+            audioCapture: audio,
+            realtimeFactory: { _ in realtime },
+            restClient: TestRestClient(),
+            permissionRequester: { true },
+            notchOverlay: TestNotchOverlay(),
+            toastPresenter: TestToastPresenter(),
+            pttTailNanos: 0,
+            laptopOpenChecker: { false },
+            builtInMicProvider: { 7 },
+            accessibilityChecker: { true },
+            secureInputChecker: { false },
+            permissionsPresenter: {},
+            dictationInjector: TestDictationInjector(),
+            clipboardWriter: { _ in },
+        )
+
+        viewModel.apiKeyInput = "sk-test"
+        await viewModel.startAndWait()
+
+        XCTAssertNil(audio.preferredDeviceID)
+        await viewModel.stopAndWait()
+    }
+
     func testLoadsAPIKeyFromKeychain() {
         let keychain = InMemoryKeychainStore()
         try? keychain.save("sk-test")

@@ -85,6 +85,8 @@ public final class TranscriptionViewModel {
     private let glossaryStore: PersonalGlossaryStore
     private let formattingClientFactory: (String) -> FormattingClientProtocol
     private let permissionRequester: () async -> Bool
+    let laptopOpenChecker: () -> Bool
+    let builtInMicProvider: () -> AudioDeviceID?
     private let accessibilityChecker: () -> Bool
     private let secureInputChecker: () -> Bool
     private let permissionsPresenter: () -> Void
@@ -146,6 +148,8 @@ public final class TranscriptionViewModel {
         realtimeCompletionTimeoutNanos: UInt64 = 5_000_000_000,
         restTimeoutNanos: UInt64 = 5_000_000_000,
         pttTailNanos: UInt64 = 200_000_000,
+        laptopOpenChecker: (() -> Bool)? = nil,
+        builtInMicProvider: (() -> AudioDeviceID?)? = nil,
         accessibilityChecker: @escaping () -> Bool = { AccessibilityPermissionClient().isTrusted() },
         secureInputChecker: @escaping () -> Bool = { IsSecureEventInputEnabled() },
         permissionsPresenter: @escaping () -> Void = {},
@@ -169,6 +173,8 @@ public final class TranscriptionViewModel {
         self.glossaryStore = glossaryStore
         self.formattingClientFactory = formattingClientFactory
         self.permissionRequester = permissionRequester
+        self.laptopOpenChecker = laptopOpenChecker ?? { LaptopDisplayState.isLaptopOpen() }
+        self.builtInMicProvider = builtInMicProvider ?? { AudioInputDeviceProvider.builtInInputDeviceID() }
         self.accessibilityChecker = accessibilityChecker
         self.secureInputChecker = secureInputChecker
         self.permissionsPresenter = permissionsPresenter
@@ -190,14 +196,6 @@ public final class TranscriptionViewModel {
             apiKeyInput = ""
             apiKeyStatus = .error("Keychain error")
         }
-    }
-
-    public var isRecording: Bool {
-        status == .recording
-    }
-
-    public var dictationAudioHistoryBaseURL: URL {
-        audioHistoryStore.baseURL
     }
 
     private var normalizedPrompt: String? {
@@ -396,7 +394,7 @@ public final class TranscriptionViewModel {
 
     private func startAudioCapture(sessionID: String) -> Bool {
         do {
-            audioCapture.setPreferredInputDevice(selectedInputDeviceID)
+            audioCapture.setPreferredInputDevice(effectiveInputDeviceID())
             DebugLog.recording(logStatusChange("audio.starting", sessionID: sessionID))
             try audioCapture.start { [weak self] data in
                 guard let self else { return }
