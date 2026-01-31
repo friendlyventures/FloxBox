@@ -5,7 +5,7 @@ extension TranscriptionViewModel {
         status == .recording
     }
 
-    var dictationAudioHistoryBaseURL: URL {
-        audioHistoryStore.baseURL
+    func refreshInputDevices() {
+        availableInputDevices = AudioInputDeviceProvider.availableDevices()
     }
 }

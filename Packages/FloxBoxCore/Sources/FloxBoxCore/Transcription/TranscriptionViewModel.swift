@@ -198,6 +198,10 @@ public final class TranscriptionViewModel {
         }
     }
 
+    public var dictationAudioHistoryBaseURL: URL {
+        audioHistoryStore.baseURL
+    }
+
     private var normalizedPrompt: String? {
         let trimmed = transcriptionPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
@@ -223,10 +227,6 @@ public final class TranscriptionViewModel {
         transcriptStore.reset()
         transcript = ""
         formattingStatus = .idle
-    }
-
-    public func refreshInputDevices() {
-        availableInputDevices = AudioInputDeviceProvider.availableDevices()
     }
 
     public func saveAPIKey() {
