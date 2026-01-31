@@ -40,6 +40,7 @@ extension NotchRecordingController: NotchRecordingControlling {}
 
 @MainActor
 @Observable
+// swiftlint:disable:next type_body_length
 public final class TranscriptionViewModel {
     public var model: TranscriptionModel = .defaultModel
     public var language: TranscriptionLanguage = .defaultLanguage
@@ -51,6 +52,12 @@ public final class TranscriptionViewModel {
     Insert punctuation and capitalization based on meaning and context.
     Use paragraph breaks only for topic shifts or when the speaker explicitly indicates a new paragraph.
     Do not use pauses or timing alone to create paragraph breaks.
+    Separate paragraphs with a blank line (one empty line).
+
+    Example:
+    This is a sentence in one paragraph.
+
+    This is another sentence in a second paragraph.
     Do not add, omit, or rephrase content beyond cleaning disfluencies and formatting. No timestamps or commentary.
     """
     public var availableInputDevices: [AudioInputDevice] = AudioInputDeviceProvider.availableDevices()

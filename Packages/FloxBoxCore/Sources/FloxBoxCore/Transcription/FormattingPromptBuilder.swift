@@ -23,8 +23,14 @@ public struct FormattingPromptBuilder {
         - Preserve words except for obvious transcription corrections.
         - Fix punctuation, casing, spacing, and paragraphing only.
         - Use paragraph breaks for topic shifts, not pauses.
+        - Separate paragraphs with a blank line (one empty line).
         - Apply glossary: replace variants with the preferred term.
         - Output only the final transcript with no commentary.
+
+        Example:
+        This is a sentence in one paragraph.
+
+        This is another sentence in a second paragraph.
 
         Glossary:
         \(glossaryBlock)
