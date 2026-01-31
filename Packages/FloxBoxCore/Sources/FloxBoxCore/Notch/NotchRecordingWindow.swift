@@ -10,6 +10,7 @@ final class NotchRecordingWindow: NSPanel {
             defer: false,
         )
 
+        appearance = NSAppearance(named: .darkAqua)
         isFloatingPanel = true
         isOpaque = false
         titleVisibility = .hidden
