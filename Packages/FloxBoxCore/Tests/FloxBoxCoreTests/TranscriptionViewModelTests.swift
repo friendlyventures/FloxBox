@@ -128,6 +128,33 @@ final class TranscriptionViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.lastTranscriptWasFormatted)
     }
 
+    func testStopShowsAwaitingNetworkImmediately() async {
+        let realtime = TestRealtimeClient()
+        let audio = TestAudioCapture()
+        let overlay = TestNotchOverlay()
+        let viewModel = TranscriptionViewModel(
+            keychain: InMemoryKeychainStore(),
+            audioCapture: audio,
+            realtimeFactory: { _ in realtime },
+            restClient: TestRestClient(),
+            permissionRequester: { true },
+            notchOverlay: overlay,
+            toastPresenter: TestToastPresenter(),
+            pttTailNanos: 0,
+            accessibilityChecker: { true },
+            secureInputChecker: { false },
+            permissionsPresenter: {},
+            dictationInjector: TestDictationInjector(),
+            clipboardWriter: { _ in },
+        )
+
+        viewModel.apiKeyInput = "sk-test"
+        await viewModel.startAndWait()
+        await viewModel.stopAndWait()
+
+        XCTAssertEqual(overlay.showAwaitingNetworkCount, 1)
+    }
+
     func testStopFormatsTranscriptShowsNotchFormattingIndicator() async {
         let realtime = TestRealtimeClient()
         let audio = TestAudioCapture()

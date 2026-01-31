@@ -479,53 +479,23 @@ public final class TranscriptionViewModel {
         )
 
         let shouldAwaitCompletion = waitForCompletion
-
-        if !realtimeFailedWhileRecording, !isRealtimeReady, let sessionUpdateTask {
-            do {
-                try await sessionUpdateTask.value
-                markRealtimeReady(startCommitTimer: false)
-            } catch {
-                realtimeFailedWhileRecording = true
-                errorMessage = error.localizedDescription
-                closeRealtime()
-            }
+        if shouldAwaitCompletion {
+            beginAwaitingNetwork()
         }
 
+        await awaitSessionUpdateIfNeeded()
+
         if realtimeFailedWhileRecording {
-            closeRealtime()
-            beginAwaitingNetwork()
-            if !startRestFallbackIfNeeded() {
-                endAwaitingNetwork()
-                finalizeDictationInjectionIfNeeded()
-            }
+            handleStopAfterRealtimeFailure()
             return
         }
 
         if hasBufferedAudio {
-            if shouldAwaitCompletion {
-                shouldCloseAfterCompletion = true
-            }
-            if let audioSendTask {
-                _ = await audioSendTask.value
-            }
-            try? await client?.commitAudio()
-            if !shouldAwaitCompletion {
-                closeRealtime()
-                status = .idle
-                finalizeDictationInjectionIfNeeded()
-                notchOverlay.hide()
-                return
-            }
-            beginAwaitingNetwork()
-            startRealtimeCompletionTimeout()
-            return
-        } else {
-            closeRealtime()
-            status = .idle
-            finalizeDictationInjectionIfNeeded()
-            notchOverlay.hide()
+            await handleStopWithBufferedAudio(shouldAwaitCompletion: shouldAwaitCompletion)
             return
         }
+
+        finishStopWithoutAudio(shouldAwaitCompletion: shouldAwaitCompletion)
     }
 
     private func applyPttTailIfNeeded(sessionID: String) async {
@@ -562,6 +532,56 @@ public final class TranscriptionViewModel {
                 "firstSendActualUptime=\(firstSendActual)",
             ]
             DebugLog.recording(summary.joined(separator: " "))
+        }
+    }
+
+    private func awaitSessionUpdateIfNeeded() async {
+        guard !realtimeFailedWhileRecording, !isRealtimeReady, let sessionUpdateTask else { return }
+        do {
+            try await sessionUpdateTask.value
+            markRealtimeReady(startCommitTimer: false)
+        } catch {
+            realtimeFailedWhileRecording = true
+            errorMessage = error.localizedDescription
+            closeRealtime()
+        }
+    }
+
+    private func handleStopAfterRealtimeFailure() {
+        closeRealtime()
+        beginAwaitingNetwork()
+        if !startRestFallbackIfNeeded() {
+            endAwaitingNetwork()
+            finalizeDictationInjectionIfNeeded()
+        }
+    }
+
+    private func handleStopWithBufferedAudio(shouldAwaitCompletion: Bool) async {
+        if shouldAwaitCompletion {
+            shouldCloseAfterCompletion = true
+        }
+        if let audioSendTask {
+            _ = await audioSendTask.value
+        }
+        try? await client?.commitAudio()
+        if !shouldAwaitCompletion {
+            closeRealtime()
+            status = .idle
+            finalizeDictationInjectionIfNeeded()
+            notchOverlay.hide()
+            return
+        }
+        startRealtimeCompletionTimeout()
+    }
+
+    private func finishStopWithoutAudio(shouldAwaitCompletion: Bool) {
+        closeRealtime()
+        status = .idle
+        finalizeDictationInjectionIfNeeded()
+        if shouldAwaitCompletion {
+            endAwaitingNetwork()
+        } else {
+            notchOverlay.hide()
         }
     }
 
@@ -793,6 +813,8 @@ public final class TranscriptionViewModel {
         }
 
         formattingTask?.cancel()
+        isFormattingFinalTranscript = true
+        notchOverlay.showFormatting()
         formattingTask = Task { @MainActor [weak self] in
             await self?.runFormatting(rawText: rawText, pipeline: pipeline)
         }
@@ -806,9 +828,7 @@ public final class TranscriptionViewModel {
 
     @MainActor
     private func runFormatting(rawText: String, pipeline: FormattingPipeline) async {
-        isFormattingFinalTranscript = true
         formattingStatus = .formatting(attempt: 1, maxAttempts: 1)
-        notchOverlay.showFormatting()
         toastPresenter.showToast("Polishing transcript…")
 
         do {
@@ -839,7 +859,7 @@ public final class TranscriptionViewModel {
         }
 
         isFormattingFinalTranscript = false
-        notchOverlay.hide()
+        endAwaitingNetwork()
         finalizeDictationInjectionIfNeeded()
     }
 
@@ -1016,7 +1036,9 @@ public final class TranscriptionViewModel {
             finalizeDictationInjectionIfNeeded()
         }
         if actions.shouldEndAwaitingNetwork {
-            endAwaitingNetwork()
+            if !isFormattingFinalTranscript {
+                endAwaitingNetwork()
+            }
         }
     }
 

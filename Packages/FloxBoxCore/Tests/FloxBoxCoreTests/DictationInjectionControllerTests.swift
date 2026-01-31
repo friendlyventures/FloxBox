@@ -5,8 +5,10 @@ import XCTest
 final class DictationInjectionControllerTests: XCTestCase {
     func testInsertFinalUsesClipboardInserter() {
         let clipboard = TestTextInserter(success: true)
+        let provider = TestFocusedTextContextProvider(value: "", caretIndex: 0)
         let injector = DictationInjectionController(
             clipboardInserter: clipboard,
+            focusedTextContextProvider: provider,
             frontmostAppProvider: { "com.apple.TextEdit" },
             bundleIdentifier: "com.floxbox.app",
         )
@@ -22,8 +24,10 @@ final class DictationInjectionControllerTests: XCTestCase {
 
     func testInsertFinalMarksFailureWhenClipboardFails() {
         let clipboard = TestTextInserter(success: false)
+        let provider = TestFocusedTextContextProvider(value: "", caretIndex: 0)
         let injector = DictationInjectionController(
             clipboardInserter: clipboard,
+            focusedTextContextProvider: provider,
             frontmostAppProvider: { "com.apple.TextEdit" },
             bundleIdentifier: "com.floxbox.app",
         )

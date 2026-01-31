@@ -65,18 +65,10 @@ final class NotchRecordingController {
         state.isRecording = false
         state.isAwaitingNetwork = true
         state.isFormatting = false
-        state.showNetworkSpinner = false
+        state.showNetworkSpinner = true
         state.onCancel = onCancel
         withAnimation(.interpolatingSpring(stiffness: 260, damping: 18)) {
             state.isExpanded = true
-        }
-
-        spinnerTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            await MainActor.run {
-                guard let self, self.state.isAwaitingNetwork else { return }
-                self.state.showNetworkSpinner = true
-            }
         }
     }
 
