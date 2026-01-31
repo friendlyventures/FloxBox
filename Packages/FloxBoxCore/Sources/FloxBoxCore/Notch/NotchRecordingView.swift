@@ -1,5 +1,12 @@
 import SwiftUI
 
+private enum NotchIndicatorStyle {
+    static let size: CGFloat = 20
+    static let trailingPadding: CGFloat = 12
+    static let verticalPadding: CGFloat = 4
+    static let spinnerTint = Color.white.opacity(0.85)
+}
+
 final class NotchRecordingState: ObservableObject {
     @Published var isRecording = false
     @Published var isExpanded = false
@@ -60,11 +67,13 @@ struct NotchRecordingView: View {
                 if state.isAwaitingNetwork, state.showNetworkSpinner {
                     NetworkIndicatorView(onCancel: { state.onCancel?() })
                         .frame(maxHeight: .infinity)
-                        .padding(.trailing, 12)
+                        .padding(.trailing, NotchIndicatorStyle.trailingPadding)
+                        .padding(.vertical, NotchIndicatorStyle.verticalPadding)
                 } else if state.isFormatting {
                     FormattingIndicatorView()
                         .frame(maxHeight: .infinity)
-                        .padding(.trailing, 12)
+                        .padding(.trailing, NotchIndicatorStyle.trailingPadding)
+                        .padding(.vertical, NotchIndicatorStyle.verticalPadding)
                 }
             }
             .animation(.interpolatingSpring(stiffness: 260, damping: 18), value: state.isExpanded)
@@ -117,15 +126,16 @@ private struct NetworkIndicatorView: View {
             if isHovering {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .foregroundStyle(NotchIndicatorStyle.spinnerTint)
             } else {
                 ProgressView()
                     .progressViewStyle(.circular)
-                    .tint(.white.opacity(0.85))
+                    .controlSize(.small)
+                    .tint(NotchIndicatorStyle.spinnerTint)
             }
         }
         .buttonStyle(.plain)
-        .frame(width: 16, height: 16)
+        .frame(width: NotchIndicatorStyle.size, height: NotchIndicatorStyle.size)
         .onHover { isHovering = $0 }
     }
 }
@@ -134,7 +144,8 @@ private struct FormattingIndicatorView: View {
     var body: some View {
         ProgressView()
             .progressViewStyle(.circular)
-            .tint(.white.opacity(0.85))
-            .frame(width: 16, height: 16)
+            .controlSize(.small)
+            .tint(NotchIndicatorStyle.spinnerTint)
+            .frame(width: NotchIndicatorStyle.size, height: NotchIndicatorStyle.size)
     }
 }
