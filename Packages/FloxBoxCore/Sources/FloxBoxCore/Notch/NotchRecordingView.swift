@@ -3,6 +3,7 @@ import SwiftUI
 private enum NotchIndicatorStyle {
     static let size: CGFloat = 20
     static let trailingPadding: CGFloat = 12
+    static let leadingPadding: CGFloat = 12
     static let verticalPadding: CGFloat = 4
     static let spinnerTint = Color.white.opacity(0.85)
 }
@@ -67,7 +68,7 @@ struct NotchRecordingView: View {
                 if state.isFormatting {
                     FormattingLeftIndicatorView()
                         .frame(maxHeight: .infinity)
-                        .padding(.leading, NotchIndicatorStyle.trailingPadding)
+                        .padding(.leading, NotchIndicatorStyle.leadingPadding)
                         .padding(.vertical, NotchIndicatorStyle.verticalPadding)
                 }
             }
@@ -161,7 +162,7 @@ private struct FormattingIndicatorView: View {
 private struct FormattingLeftIndicatorView: View {
     var body: some View {
         Image(systemName: "textformat.alt")
-            .font(.system(size: 11, weight: .semibold))
+            .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(Color.white.opacity(0.7))
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
@@ -169,5 +170,7 @@ private struct FormattingLeftIndicatorView: View {
                 Capsule()
                     .fill(Color.white.opacity(0.12)),
             )
+            .frame(minWidth: NotchIndicatorStyle.size, minHeight: NotchIndicatorStyle.size)
+            .transaction { $0.animation = nil }
     }
 }
